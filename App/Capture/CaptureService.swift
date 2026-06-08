@@ -36,6 +36,17 @@ final class CaptureService: NSObject, CameraCapturing {
     /// Mutated only on `sessionQueue`.
     private var activeProcessors: Set<PhotoCaptureProcessor> = []
 
+    // MARK: Init
+
+    override init() {
+        super.init()
+        registerSessionObservers()
+    }
+
+    deinit {
+        NotificationCenter.default.removeObserver(self)
+    }
+
     // MARK: Session lifecycle
 
     func startSession() {
@@ -317,6 +328,55 @@ extension CaptureService {
             )
         }
         return AVCapturePhotoSettings(rawPixelFormatType: rawFormat.pixelFormat)
+    }
+}
+
+// MARK: - Session interruption & runtime-error recovery
+
+extension CaptureService {
+    fileprivate func registerSessionObservers() {
+        let center = NotificationCenter.default
+        center.addObserver(
+            self, selector: #selector(sessionRuntimeError(_:)),
+            name: .AVCaptureSessionRuntimeError, object: session)
+        center.addObserver(
+            self, selector: #selector(sessionWasInterrupted(_:)),
+            name: .AVCaptureSessionWasInterrupted, object: session)
+        center.addObserver(
+            self, selector: #selector(sessionInterruptionEnded(_:)),
+            name: .AVCaptureSessionInterruptionEnded, object: session)
+    }
+
+    /// A runtime error stops the session. Media-services resets are recoverable —
+    /// restart on the session queue. (Notifications arrive on an internal queue.)
+    @objc private func sessionRuntimeError(_ note: Notification) {
+        let nsError = note.userInfo?[AVCaptureSessionErrorKey] as? NSError
+        let desc = nsError?.localizedDescription ?? "unknown"
+        let code = nsError?.code ?? 0
+        logger.error("Session runtime error: \(desc, privacy: .public) (code \(code))")
+        guard code == AVError.Code.mediaServicesWereReset.rawValue else { return }
+        sessionQueue.async { [weak self] in
+            guard let self, !self.session.isRunning else { return }
+            self.session.startRunning()
+            self.logger.notice("Session restarted after media-services reset.")
+        }
+    }
+
+    /// The system took the camera (call, Control Center, another app, resource
+    /// pressure). Log the reason; the preview pauses until the interruption ends.
+    @objc private func sessionWasInterrupted(_ note: Notification) {
+        let raw = (note.userInfo?[AVCaptureSessionInterruptionReasonKey] as? NSNumber)?.intValue
+        let reason = raw.flatMap(AVCaptureSession.InterruptionReason.init(rawValue:))
+        logger.notice("Session interrupted (reason: \(reason?.rawValue ?? -1)).")
+    }
+
+    /// Interruption ended — resume the session so the preview comes back.
+    @objc private func sessionInterruptionEnded(_ note: Notification) {
+        sessionQueue.async { [weak self] in
+            guard let self, !self.session.isRunning else { return }
+            self.session.startRunning()
+            self.logger.notice("Session resumed after interruption.")
+        }
     }
 }
 
