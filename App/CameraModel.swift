@@ -31,6 +31,9 @@ public final class CameraModel {
     public var preferProRAW: Bool = true
     public var isProRAWAvailable: Bool = false
 
+    // MARK: Preview framing (composition guide; RAW still captures full sensor)
+    var aspectRatio: CameraAspectRatio = .fourThree
+
     // MARK: Monitoring toggles
     public var zebraEnabled: Bool = false
     public var zebraThreshold: Float = 0.95

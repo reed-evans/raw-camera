@@ -25,6 +25,12 @@ line_length:
   warning: 140
   error: 200
 
+# Align with the project coding standard (200-400 typical, 800 max) rather than
+# SwiftLint's stricter 400 default.
+file_length:
+  warning: 500
+  error: 800
+
 identifier_name:
   # simd / math conventions use short names (s, c, p, uv, vid).
   min_length: 1

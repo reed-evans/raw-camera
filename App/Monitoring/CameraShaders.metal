@@ -54,28 +54,39 @@ vertex VertexOut preview_vertex(uint vid [[vertex_id]],
 //       energy >= peakingThreshold (peakingEnabled).
 fragment float4 preview_fragment(VertexOut in [[stage_in]],
                                  constant PreviewUniforms &uniforms [[buffer(0)]],
+                                 constant float &targetRatio [[buffer(1)]],
                                  texture2d<float> frame [[texture(0)]]) {
     constexpr sampler s(address::clamp_to_edge, filter::linear);
 
-    // Aspect-fit (letterbox): show the WHOLE camera frame without stretching, so
-    // the preview matches the captured photo in any orientation. Expand the UVs
-    // on the axis that needs bars; anything outside [0,1] is a black bar. Uses the
-    // real texture + drawable dimensions, so it adapts as the device rotates.
+    // Two-stage aspect handling, correct in any orientation:
+    //   1. letterbox the chosen TARGET frame (e.g. 16:9) into the drawable,
+    //   2. crop the camera texture to that target ratio.
+    // When the target equals the camera's native aspect (4:3), stage 2 is a no-op
+    // and this is plain aspect-fit. RAW still captures the full sensor frame.
     float texW = float(frame.get_width());
     float texH = float(frame.get_height());
     float2 vs = max(uniforms.viewSize, float2(1.0, 1.0));
+    float texAspect = (texH > 0.0) ? (texW / texH) : 1.0;
+    float viewAspect = vs.x / vs.y;
+    // Orient the >=1 target ratio to match the camera frame (portrait vs landscape).
+    float target = (texAspect >= 1.0) ? targetRatio : (1.0 / targetRatio);
+
+    // Stage 1: fit the target frame into the drawable; outside [0,1] is a bar.
     float2 uv = in.uv;
-    if (texW > 0.0 && texH > 0.0) {
-        float texAspect = texW / texH;
-        float viewAspect = vs.x / vs.y;
-        if (viewAspect > texAspect) {
-            uv.x = (uv.x - 0.5) * (viewAspect / texAspect) + 0.5;  // pillarbox
-        } else {
-            uv.y = (uv.y - 0.5) * (texAspect / viewAspect) + 0.5;  // letterbox
-        }
+    if (viewAspect > target) {
+        uv.x = (in.uv.x - 0.5) * (viewAspect / target) + 0.5;  // pillarbox
+    } else {
+        uv.y = (in.uv.y - 0.5) * (target / viewAspect) + 0.5;  // letterbox
     }
     if (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0) {
-        return float4(0.0, 0.0, 0.0, 1.0);  // bar region
+        return float4(0.0, 0.0, 0.0, 1.0);
+    }
+
+    // Stage 2: crop the camera texture to the target ratio (centered).
+    if (target > texAspect) {
+        uv.y = (uv.y - 0.5) * (texAspect / target) + 0.5;
+    } else if (target < texAspect) {
+        uv.x = (uv.x - 0.5) * (target / texAspect) + 0.5;
     }
 
     float4 color = frame.sample(s, uv);

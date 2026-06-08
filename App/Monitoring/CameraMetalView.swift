@@ -65,7 +65,9 @@ struct CameraMetalView: UIViewRepresentable {
         // integration node's derived `PreviewUniforms` (toggles, thresholds,
         // peakingColor, rotation). The renderer keeps `viewSize` per-drawable.
         context.coordinator.updateUniforms(
-            model.previewUniforms, histogramEnabled: model.histogramEnabled)
+            model.previewUniforms,
+            histogramEnabled: model.histogramEnabled,
+            aspectRatio: model.aspectRatio.ratio)
     }
 }
 
@@ -107,6 +109,9 @@ final class MetalRenderer: NSObject, MTKViewDelegate, @unchecked Sendable {
     /// When false, the histogram compute pass + readback are skipped entirely so
     /// the GPU does no histogram work while the overlay is hidden.
     private var histogramEnabled = false
+    /// Preview framing ratio (long:short, >= 1). Bound to the fragment shader on
+    /// buffer index 1 — kept off `PreviewUniforms` so its frozen ABI is untouched.
+    private var targetAspectRatio: Float = 4.0 / 3.0
 
     init(histogramProducer: HistogramProducer, framePump: FramePump) {
         self.histogramProducer = histogramProducer
@@ -181,12 +186,13 @@ final class MetalRenderer: NSObject, MTKViewDelegate, @unchecked Sendable {
     /// Snapshot the integration node's derived `PreviewUniforms` for the next
     /// frame. Everything except `viewSize` (renderer-owned, per-drawable) is taken
     /// from the model snapshot; the FROZEN struct is copied wholesale, not mutated.
-    func updateUniforms(_ snapshot: PreviewUniforms, histogramEnabled: Bool) {
+    func updateUniforms(_ snapshot: PreviewUniforms, histogramEnabled: Bool, aspectRatio: Float) {
         stateLock.lock()
         let viewSize = uniforms.viewSize
         uniforms = snapshot
         uniforms.viewSize = viewSize
         self.histogramEnabled = histogramEnabled
+        self.targetAspectRatio = aspectRatio
         stateLock.unlock()
     }
 
@@ -257,12 +263,12 @@ final class MetalRenderer: NSObject, MTKViewDelegate, @unchecked Sendable {
         // Pair the backing with the texture and hold it for this command buffer.
         let cvTexture = currentCVTexture
         let doHistogram = histogramEnabled
+        let targetRatio = targetAspectRatio
         var frameUniforms = uniforms
         frameUniforms.viewSize = drawableSize
         stateLock.unlock()
 
         guard let texture,
-            let renderPipeline,
             let commandQueue,
             let drawable = view.currentDrawable,
             let passDescriptor = view.currentRenderPassDescriptor,
@@ -276,7 +282,7 @@ final class MetalRenderer: NSObject, MTKViewDelegate, @unchecked Sendable {
         encodePreview(
             texture: texture,
             uniforms: &frameUniforms,
-            pipeline: renderPipeline,
+            targetRatio: targetRatio,
             passDescriptor: passDescriptor,
             commandBuffer: commandBuffer
         )
@@ -295,16 +301,18 @@ final class MetalRenderer: NSObject, MTKViewDelegate, @unchecked Sendable {
     private func encodePreview(
         texture: MTLTexture,
         uniforms: inout PreviewUniforms,
-        pipeline: MTLRenderPipelineState,
+        targetRatio: Float,
         passDescriptor: MTLRenderPassDescriptor,
         commandBuffer: MTLCommandBuffer
     ) {
-        guard let encoder = commandBuffer.makeRenderCommandEncoder(descriptor: passDescriptor) else {
-            return
-        }
+        guard let pipeline = renderPipeline,
+            let encoder = commandBuffer.makeRenderCommandEncoder(descriptor: passDescriptor)
+        else { return }
+        var ratio = targetRatio
         encoder.setRenderPipelineState(pipeline)
         encoder.setVertexBytes(&uniforms, length: MemoryLayout<PreviewUniforms>.stride, index: 0)
         encoder.setFragmentBytes(&uniforms, length: MemoryLayout<PreviewUniforms>.stride, index: 0)
+        encoder.setFragmentBytes(&ratio, length: MemoryLayout<Float>.stride, index: 1)
         encoder.setFragmentTexture(texture, index: 0)
         encoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 3)
         encoder.endEncoding()

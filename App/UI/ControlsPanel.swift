@@ -78,6 +78,7 @@ struct ControlsPanel: View {
                     ExposureSection(model: model)
                     WhiteBalanceSection(model: model)
                     FocusSection(model: model)
+                    AspectSection(model: model)
                     MonitoringSection(model: model)
                     FormatSection(model: model)
                 }
@@ -255,6 +256,31 @@ private struct FormatSection: View {
                 Text(model.isProRAWAvailable ? "available" : "unavailable")
                     .font(.system(size: 9, weight: .medium, design: .monospaced))
                     .foregroundStyle(model.isProRAWAvailable ? Color.green.opacity(0.8) : Color.white.opacity(0.35))
+            }
+        }
+    }
+}
+
+private struct AspectSection: View {
+    @Bindable var model: CameraModel
+
+    var body: some View {
+        CamSection(label: "RATIO") {
+            HStack(spacing: 4) {
+                ForEach(CameraAspectRatio.allCases) { ratio in
+                    Button {
+                        model.aspectRatio = ratio
+                    } label: {
+                        Text(ratio.label)
+                            .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                            .foregroundStyle(model.aspectRatio == ratio ? .black : .white.opacity(0.5))
+                            .padding(.horizontal, 6).padding(.vertical, 4)
+                            .background(
+                                model.aspectRatio == ratio ? Color.white : Color.white.opacity(0.06),
+                                in: RoundedRectangle(cornerRadius: 5, style: .continuous))
+                    }
+                    .buttonStyle(.plain)
+                }
             }
         }
     }
