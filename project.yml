@@ -1,0 +1,31 @@
+name: RAWCamera
+options:
+  bundleIdPrefix: com.rawcamera
+  deploymentTarget:
+    iOS: "17.0"
+  createIntermediateGroups: true
+packages:
+  CameraCore:
+    path: CameraCore
+targets:
+  RAWCamera:
+    type: application
+    platform: iOS
+    deploymentTarget: "17.0"
+    sources:
+      - path: App
+    dependencies:
+      - package: CameraCore
+        product: CameraCore
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.rawcamera.app
+        INFOPLIST_FILE: App/Info.plist
+        GENERATE_INFOPLIST_FILE: NO
+        SWIFT_VERSION: "6.0"
+        SWIFT_STRICT_CONCURRENCY: complete
+        TARGETED_DEVICE_FAMILY: "1,2"
+        CODE_SIGNING_ALLOWED: NO
+        CODE_SIGNING_REQUIRED: NO
+        CODE_SIGN_IDENTITY: ""
+        MTL_FAST_MATH: YES

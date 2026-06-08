@@ -1,0 +1,15 @@
+# Generated Xcode project (regenerate with `xcodegen generate`)
+RAWCamera.xcodeproj/
+
+# Build output
+.build-xc/
+CameraCore/.build/
+DerivedData/
+*.xcuserstate
+xcuserdata/
+
+# macOS
+.DS_Store
+
+# Status snapshot logs
+/tmp/t*.log

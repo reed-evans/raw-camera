@@ -1,0 +1,35 @@
+# RAWCamera SwiftLint config.
+included:
+  - App
+  - CameraCore/Sources
+  - CameraCore/Tests
+excluded:
+  - .build-xc
+  - CameraCore/.build
+
+disabled_rules:
+  # TODO markers are contractual Phase-0 -> Phase-1 worker handoffs (each tags
+  # the owning worktree + grader). Workers delete them as they implement.
+  - todo
+  # swift-format owns comma/formatting style; avoid a tug-of-war between tools.
+  - trailing_comma
+
+opt_in_rules:
+  - force_unwrapping
+  - empty_count
+  - first_where
+
+force_unwrapping: warning
+
+line_length:
+  warning: 140
+  error: 200
+
+identifier_name:
+  # simd / math conventions use short names (s, c, p, uv, vid).
+  min_length: 1
+  excluded: [s, c, p, x, y, z, r, g, b, vid, uv, id, _pad]
+  allowed_symbols: ["_"]
+
+type_name:
+  min_length: 2
