@@ -34,6 +34,13 @@ public final class CameraModel {
     // MARK: Preview framing (composition guide; RAW still captures full sensor)
     var aspectRatio: CameraAspectRatio = .fourThree
 
+    // MARK: Zoom
+    public var zoomFactor: CGFloat = 1.0
+    public var minZoom: CGFloat = 1.0
+    public var maxZoom: CGFloat = 10.0
+    /// Show the vertical zoom slider overlay (settings-configurable).
+    var showZoomSlider: Bool = false
+
     // MARK: Monitoring toggles
     public var zebraEnabled: Bool = false
     public var zebraThreshold: Float = 0.95
@@ -119,6 +126,12 @@ public final class CameraModel {
                 self?.lastCaptureError = error
             }
         }
+        service.onZoomRange = { [weak self] lo, hi in
+            Task { @MainActor in
+                self?.minZoom = lo
+                self?.maxZoom = max(lo, hi)
+            }
+        }
     }
 
     // MARK: Intents (frozen signatures; integration completes the bodies)
@@ -177,5 +190,11 @@ public final class CameraModel {
     public func setPreferProRAW(_ prefer: Bool) {
         preferProRAW = prefer
         service.setPreferProRAW(prefer)
+    }
+
+    public func setZoom(_ factor: CGFloat) {
+        let clamped = min(max(factor, minZoom), maxZoom)
+        zoomFactor = clamped
+        service.setZoom(factor: clamped)
     }
 }

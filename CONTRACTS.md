@@ -87,6 +87,11 @@ results reach `CameraModel` (which would otherwise be stuck at `.unset`/`false`)
 `CameraModel.init` wires both. The Metal side of `PreviewUniforms` is now also
 guarded at compile time by `static_assert` in `CameraShaders.metal` (T0-2).
 
+**Amendment A2 (zoom):** `onZoomRange: ((CGFloat, CGFloat) -> Void)?` and
+`func setZoom(factor: CGFloat)` added — the implementation clamps to the device
+range. `CameraModel` exposes `zoomFactor`/`minZoom`/`maxZoom` and drives it from
+pinch + an optional vertical slider (`showZoomSlider`).
+
 ---
 
 ## 4. `PreviewUniforms` — FROZEN ABI (grader T1-7)

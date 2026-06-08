@@ -5,6 +5,8 @@ import SwiftUI
 // monitoring overlays over the shared `CameraModel`.
 struct CameraScreen: View {
     @State private var model: CameraModel
+    @State private var pinching = false
+    @State private var zoomAtPinchStart: CGFloat = 1.0
 
     init(model: CameraModel) {
         _model = State(initialValue: model)
@@ -32,8 +34,26 @@ struct CameraScreen: View {
                         )
                     )
                 }
+                .gesture(
+                    MagnifyGesture()
+                        .onChanged { value in
+                            if !pinching {
+                                pinching = true
+                                zoomAtPinchStart = model.zoomFactor
+                            }
+                            model.setZoom(zoomAtPinchStart * value.magnification)
+                        }
+                        .onEnded { _ in pinching = false }
+                )
             }
             .ignoresSafeArea()
+
+            if model.showZoomSlider {
+                HStack {
+                    Spacer()
+                    ZoomSlider(model: model).padding(.trailing, 10)
+                }
+            }
 
             VStack(spacing: 10) {
                 if model.levelGuideEnabled {

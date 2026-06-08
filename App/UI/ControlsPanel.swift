@@ -227,6 +227,7 @@ private struct MonitoringSection: View {
                 }
                 MonRow(label: "HIST", isOn: $model.histogramEnabled)
                 MonRow(label: "LEVEL", isOn: $model.levelGuideEnabled)
+                MonRow(label: "ZOOM", isOn: $model.showZoomSlider)
             }
             .animation(.easeInOut(duration: 0.18), value: model.zebraEnabled)
             .animation(.easeInOut(duration: 0.18), value: model.focusPeakingEnabled)

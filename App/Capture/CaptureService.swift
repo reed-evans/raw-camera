@@ -18,6 +18,10 @@ final class CaptureService: NSObject, CameraCapturing {
     var onVideoFrame: ((CVPixelBuffer) -> Void)?
     var onConfigured: ((ExposureLimits, Bool) -> Void)?
     var onCaptureFinished: ((String?) -> Void)?
+    var onZoomRange: ((CGFloat, CGFloat) -> Void)?
+
+    /// Usable preview zoom is capped well below the device's huge digital max.
+    private static let maxUsableZoom: CGFloat = 10.0
     private(set) var exposureLimits: ExposureLimits = .unset
     private(set) var isProRAWAvailable: Bool = false
 
@@ -191,6 +195,21 @@ final class CaptureService: NSObject, CameraCapturing {
             self.updateSelectedRAWFormat()
         }
     }
+
+    func setZoom(factor: CGFloat) {
+        sessionQueue.async { [weak self] in
+            guard let self, let device = self.videoDevice else { return }
+            do {
+                try device.lockForConfiguration()
+                defer { device.unlockForConfiguration() }
+                let lo = device.minAvailableVideoZoomFactor
+                let hi = min(device.maxAvailableVideoZoomFactor, CaptureService.maxUsableZoom)
+                device.videoZoomFactor = min(max(factor, lo), hi)
+            } catch {
+                self.logger.error("setZoom failed: \(error.localizedDescription, privacy: .public)")
+            }
+        }
+    }
 }
 
 // MARK: - Session configuration (fileprivate helpers)
@@ -284,6 +303,8 @@ extension CaptureService {
         isProRAWAvailable = photoOutput.isAppleProRAWSupported
         updateSelectedRAWFormat()
         onConfigured?(limits, isProRAWAvailable)
+        let maxZoom = min(device.maxAvailableVideoZoomFactor, CaptureService.maxUsableZoom)
+        onZoomRange?(device.minAvailableVideoZoomFactor, maxZoom)
     }
 
     fileprivate func updateSelectedRAWFormat() {

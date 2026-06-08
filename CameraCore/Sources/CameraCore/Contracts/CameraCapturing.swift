@@ -28,6 +28,10 @@ public protocol CameraCapturing: AnyObject {
     /// saved to Photos; non-`nil` is a user-presentable failure message.
     var onCaptureFinished: ((_ error: String?) -> Void)? { get set }
 
+    /// Fires after configuration (background queue): the device's usable video
+    /// zoom range (min...max). Consumers hop to the main actor.
+    var onZoomRange: ((_ minZoom: CGFloat, _ maxZoom: CGFloat) -> Void)? { get set }
+
     /// Active-format exposure range; `.unset` until a device is configured.
     var exposureLimits: ExposureLimits { get }
 
@@ -53,4 +57,7 @@ public protocol CameraCapturing: AnyObject {
 
     /// Prefer ProRAW (DNG) over Bayer RAW when both are available.
     func setPreferProRAW(_ prefer: Bool)
+
+    /// Set the video zoom factor; the implementation clamps to the device range.
+    func setZoom(factor: CGFloat)
 }

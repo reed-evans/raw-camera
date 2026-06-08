@@ -208,3 +208,51 @@ to the orchestrator — do not edit CONTRACTS.md unilaterally.
   (orchestrator-mediated), never an ad-hoc edit in a worktree.
 - **Learning**: after the run, `/evolve` the captured instincts into a Swift/Metal
   skill so the next camera-app build starts smarter.
+
+---
+
+## 9. Paste-ready Claude Code kickoff prompt
+
+> Drop this in Claude Code at the repo root, with `BUILD-PLAN.md` present.
+
+```text
+You are the ORCHESTRATOR for an autonomous build. Read BUILD-PLAN.md in full and
+execute it. Use the ECC loop-operator agent + the continuous-agent-loop (autonomous-loops DAG) skill to run a team of subagents via Claude Code's native subagent delegation. Create the Phase-1 worktrees with git worktree add (or node scripts/orchestrate-worktrees.js). Do not write feature code yourself — decompose, dispatch,
+gate, and merge.
+
+EXECUTE THE DAG IN BUILD-PLAN.md §4:
+
+PHASE 0 (serial): Have the architect + planner produce CONTRACTS.md and the Xcode
+scaffold (app target + CameraCore Swift package + CameraCoreTests) per §3. The
+PreviewUniforms byte layout and the CameraService/CameraModel API surfaces are
+frozen here. Generate a `swift-reviewer` agent from rules/swift (§5 note). Build
+must be green on empty shells before you fork. Commit and record the sha.
+
+PHASE 1 (parallel): Create four git worktrees off the Phase-0 commit — wt/capture,
+wt/metal, wt/controls-ui, wt/monitoring-ui — and run one worker per worktree
+concurrently using the §7 brief. Each worker pushes pure logic into CameraCore and
+writes its CameraCore tests first (tdd-guide). A worktree may merge only when
+Tier 0 + its Tier 1 tests are green and swift-reviewer approves (§6 merge rule).
+
+PHASE 2 (join): After all four merge, run the integration worker in wt/integration
+to wire everything through CameraModel and resolve real integration. Watch for
+contract drift, especially the Swift↔Metal uniform layout (grader T1-7).
+
+PHASE 3: Run the full Tier 0–2 grader suite (§6) on the integrated branch. Route
+red gates back per §8. Iterate with pass@3 before escalating.
+
+PHASE 4 — HARD STOP: When Tier 0–2 are green, DO NOT declare done. Emit the §6
+Tier 3 device checklist and STOP. Live RAW capture cannot be verified by CI; a
+human must run it on a device.
+
+RULES:
+- Enforce exclusive file ownership (§2). Workers never edit files they don't own.
+- Contract changes are orchestrator-mediated only; never let a worktree edit
+  CONTRACTS.md unilaterally.
+- Run `ecc status --markdown --write status.md` between phases; keep the PR queue
+  in sync. status.md is the source of truth.
+- Run /security-scan (AgentShield) as a gate before Phase 4.
+- Capture instincts via continuous-learning-v2 throughout.
+
+Begin with Phase 0. Report the task graph and the frozen contracts before forking.
+```
