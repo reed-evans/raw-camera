@@ -64,7 +64,8 @@ struct CameraMetalView: UIViewRepresentable {
         // Snapshot the (main-actor) monitoring controls into the renderer via the
         // integration node's derived `PreviewUniforms` (toggles, thresholds,
         // peakingColor, rotation). The renderer keeps `viewSize` per-drawable.
-        context.coordinator.updateUniforms(model.previewUniforms)
+        context.coordinator.updateUniforms(
+            model.previewUniforms, histogramEnabled: model.histogramEnabled)
     }
 }
 
@@ -103,6 +104,9 @@ final class MetalRenderer: NSObject, MTKViewDelegate, @unchecked Sendable {
     private var currentCVTexture: CVMetalTexture?
     private var uniforms = PreviewUniforms()
     private var drawableSize = SIMD2<Float>(0, 0)
+    /// When false, the histogram compute pass + readback are skipped entirely so
+    /// the GPU does no histogram work while the overlay is hidden.
+    private var histogramEnabled = false
 
     init(histogramProducer: HistogramProducer, framePump: FramePump) {
         self.histogramProducer = histogramProducer
@@ -177,11 +181,12 @@ final class MetalRenderer: NSObject, MTKViewDelegate, @unchecked Sendable {
     /// Snapshot the integration node's derived `PreviewUniforms` for the next
     /// frame. Everything except `viewSize` (renderer-owned, per-drawable) is taken
     /// from the model snapshot; the FROZEN struct is copied wholesale, not mutated.
-    func updateUniforms(_ snapshot: PreviewUniforms) {
+    func updateUniforms(_ snapshot: PreviewUniforms, histogramEnabled: Bool) {
         stateLock.lock()
         let viewSize = uniforms.viewSize
         uniforms = snapshot
         uniforms.viewSize = viewSize
+        self.histogramEnabled = histogramEnabled
         stateLock.unlock()
     }
 
@@ -251,6 +256,7 @@ final class MetalRenderer: NSObject, MTKViewDelegate, @unchecked Sendable {
         let texture = currentTexture
         // Pair the backing with the texture and hold it for this command buffer.
         let cvTexture = currentCVTexture
+        let doHistogram = histogramEnabled
         var frameUniforms = uniforms
         frameUniforms.viewSize = drawableSize
         stateLock.unlock()
@@ -263,7 +269,10 @@ final class MetalRenderer: NSObject, MTKViewDelegate, @unchecked Sendable {
             let commandBuffer = commandQueue.makeCommandBuffer()
         else { return }
 
-        encodeHistogram(texture: texture, commandBuffer: commandBuffer)
+        // Skip the histogram clear+compute entirely when the overlay is hidden.
+        if doHistogram {
+            encodeHistogram(texture: texture, commandBuffer: commandBuffer)
+        }
         encodePreview(
             texture: texture,
             uniforms: &frameUniforms,
@@ -274,10 +283,11 @@ final class MetalRenderer: NSObject, MTKViewDelegate, @unchecked Sendable {
 
         commandBuffer.present(drawable)
         // Capture `cvTexture` so the camera frame's IOSurface stays alive until the
-        // GPU finishes this command buffer (prevents a use-after-free fault).
+        // GPU finishes this command buffer (prevents a use-after-free fault). Read
+        // the histogram back only if we computed it this frame.
         commandBuffer.addCompletedHandler { [weak self, cvTexture] _ in
             _ = cvTexture
-            self?.readbackHistogram()
+            if doHistogram { self?.readbackHistogram() }
         }
         commandBuffer.commit()
     }
