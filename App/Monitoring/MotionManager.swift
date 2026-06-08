@@ -13,54 +13,43 @@ import Foundation
 //   • onAttitude is invoked on the background queue; callers are responsible for
 //     hopping to @MainActor before writing observable model state.
 //   • @Observable writes are NOT done here — this is a pure producer.
-@MainActor
 final class MotionManager {
 
     // MARK: - Public interface
 
-    /// Called on a background queue when a new attitude sample is available.
-    /// Callers must dispatch to @MainActor before touching CameraModel.
+    /// Called on the CoreMotion background queue for every attitude sample.
+    /// Set this before calling start(). Callers must hop to @MainActor before
+    /// writing observable model state.
     var onAttitude: ((Level.Attitude) -> Void)?
 
     // MARK: - Private state
 
-    @ObservationIgnored private let motionManager = CMMotionManager()
-    @ObservationIgnored private let motionQueue = OperationQueue()
+    private let motionManager = CMMotionManager()
+    private let motionQueue = OperationQueue()
 
     // MARK: - Lifecycle
 
     /// Begin device-motion updates on a background queue.
+    /// Set onAttitude before calling this.
     func start() {
         guard motionManager.isDeviceMotionAvailable else { return }
         motionQueue.name = "com.rawcamera.motion"
         motionQueue.qualityOfService = .userInteractive
         motionManager.deviceMotionUpdateInterval = 1.0 / 30.0
-        // Capture the callback outside the actor to avoid data races.
-        let callback = onAttitude
-        motionManager.startDeviceMotionUpdates(to: motionQueue) { [weak self] motion, _ in
+        // Capture the callback once so it is delivered exactly once per sample
+        // on the background motion queue — no hop, no double delivery.
+        let deliver = onAttitude
+        motionManager.startDeviceMotionUpdates(to: motionQueue) { motion, _ in
             guard let motion else { return }
             let g = motion.gravity
             let gravity = SIMD3<Double>(g.x, g.y, g.z)
             let attitude = Level.attitude(gravity: gravity)
-            // Invoke on the background queue — caller hops to main actor.
-            callback?(attitude)
-            // Also forward via the stored property in case it changed after start().
-            self?.dispatchAttitude(attitude)
+            deliver?(attitude)
         }
     }
 
-    /// Stop device-motion updates and release the callback.
+    /// Stop device-motion updates.
     func stop() {
         motionManager.stopDeviceMotionUpdates()
-    }
-
-    // MARK: - Private helpers
-
-    /// Forwards an attitude sample through the stored onAttitude closure.
-    /// Called from the background motion queue; nonisolated to avoid actor hop.
-    nonisolated private func dispatchAttitude(_ attitude: Level.Attitude) {
-        Task { @MainActor [weak self] in
-            self?.onAttitude?(attitude)
-        }
     }
 }

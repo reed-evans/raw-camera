@@ -92,11 +92,7 @@ struct HistogramView: View {
         for i in 0..<HistogramData.binCount {
             let x = CGFloat(i) * binWidth
             let y = size.height * (1.0 - CGFloat(bins[i]))
-            if i == 0 {
-                fillPath.addLine(to: CGPoint(x: x, y: y))
-            } else {
-                fillPath.addLine(to: CGPoint(x: x, y: y))
-            }
+            fillPath.addLine(to: CGPoint(x: x, y: y))
         }
         fillPath.addLine(to: CGPoint(x: size.width, y: size.height))
         fillPath.closeSubpath()
