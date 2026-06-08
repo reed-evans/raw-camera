@@ -1,11 +1,12 @@
 import AVFoundation
 import Photos
+import os.log
 
 // OWNER: wt/capture.
 //
 // AVCapturePhotoCaptureDelegate that collects RAW/ProRAW DNG data and saves it
 // to the Photos library. Errors are forwarded via `onCaptureFinished` —
-// never silently swallowed.
+// never silently swallowed — and logged with their real domain/code.
 
 final class PhotoCaptureProcessor: NSObject {
 
@@ -25,6 +26,8 @@ final class PhotoCaptureProcessor: NSObject {
     /// `didFinishCaptureFor` can fire `onCaptureFinished` exactly once.
     private var captureError: String?
 
+    private let logger = Logger(subsystem: "com.rawcamera", category: "PhotoCapture")
+
     init(onCaptureFinished: ((String?) -> Void)?) {
         self.onCaptureFinished = onCaptureFinished
     }
@@ -41,13 +44,14 @@ extension PhotoCaptureProcessor: AVCapturePhotoCaptureDelegate {
     ) {
         if let error {
             // Store the error; do NOT fire onCaptureFinished here.
-            // didFinishCaptureFor always fires last and will emit exactly one callback.
-            captureError = error.localizedDescription
+            // didFinishCaptureFor always fires last and emits exactly one callback.
+            captureError = describe(error, context: "processing photo")
             return
         }
 
         if photo.isRawPhoto {
             rawData = photo.fileDataRepresentation()
+            if rawData == nil { logger.error("RAW fileDataRepresentation() returned nil.") }
             // Determine ProRAW via the pixel buffer's format type.
             if let pixelBuffer = photo.pixelBuffer {
                 let fmt = CVPixelBufferGetPixelFormatType(pixelBuffer)
@@ -64,23 +68,19 @@ extension PhotoCaptureProcessor: AVCapturePhotoCaptureDelegate {
         error: Error?
     ) {
         // Terminal delegate method — fires exactly once per capture.
-        // Evaluate in priority order: capture-level error > processing error >
-        // missing RAW data > success save path.
+        // Priority: capture-level error > processing error > missing data > save.
         if let error {
-            finish(error.localizedDescription)
+            finish(describe(error, context: "capture"))
             return
         }
-
         if let processingError = captureError {
             finish(processingError)
             return
         }
-
         guard let rawData else {
             finish("No RAW data received from capture.")
             return
         }
-
         saveToPhotos(rawData: rawData, processedData: processedData)
     }
 
@@ -91,28 +91,51 @@ extension PhotoCaptureProcessor: AVCapturePhotoCaptureDelegate {
         onComplete?(self)
     }
 
+    /// Log an error with its real domain/code and return a user-facing message.
+    private func describe(_ error: Error, context: String) -> String {
+        let ns = error as NSError
+        let detail = "\(ns.domain) code \(ns.code) — \(ns.localizedDescription)"
+        logger.error("Capture error [\(context, privacy: .public)]: \(detail, privacy: .public)")
+        return ns.localizedDescription
+    }
+
     // MARK: - Private: Photos library save
 
     private func saveToPhotos(rawData: Data, processedData: Data?) {
-        PHPhotoLibrary.shared().performChanges {
-            let creationRequest = PHAssetCreationRequest.forAsset()
+        // Photos reliably ingests a RAW DNG from a file URL with the correct
+        // extension; raw bytes added via `data:` are often rejected with a generic
+        // "operation could not be completed". Stage the DNG to a temp .dng file.
+        let rawURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+            .appendingPathExtension("dng")
+        do {
+            try rawData.write(to: rawURL)
+        } catch {
+            finish(describe(error, context: "writing temp DNG"))
+            return
+        }
 
+        PHPhotoLibrary.shared().performChanges {
+            let request = PHAssetCreationRequest.forAsset()
+            let rawOptions = PHAssetResourceCreationOptions()
+            rawOptions.shouldMoveFile = true
             if let processedData, self.isProRAWCapture {
-                // ProRAW: save processed as the primary photo, RAW as alternate.
-                creationRequest.addResource(with: .photo, data: processedData, options: nil)
-                let rawOptions = PHAssetResourceCreationOptions()
-                rawOptions.shouldMoveFile = false
-                creationRequest.addResource(with: .alternatePhoto, data: rawData, options: rawOptions)
+                // ProRAW: processed image is the primary photo, the DNG is the alternate.
+                request.addResource(with: .photo, data: processedData, options: nil)
+                request.addResource(with: .alternatePhoto, fileURL: rawURL, options: rawOptions)
             } else {
-                // Bayer RAW or ProRAW without a paired processed image.
-                creationRequest.addResource(with: .photo, data: rawData, options: nil)
+                // Bayer RAW (or ProRAW with no paired processed image): DNG is the photo.
+                request.addResource(with: .photo, fileURL: rawURL, options: rawOptions)
             }
         } completionHandler: { [weak self] success, error in
+            // If shouldMoveFile consumed the file this is a harmless no-op.
+            try? FileManager.default.removeItem(at: rawURL)
             if success {
                 self?.finish(nil)
+            } else if let error {
+                self?.finish(self?.describe(error, context: "Photos save") ?? error.localizedDescription)
             } else {
-                let message = error?.localizedDescription ?? "Unknown Photos library error."
-                self?.finish(message)
+                self?.finish("Unknown Photos library error.")
             }
         }
     }
