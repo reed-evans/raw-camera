@@ -10,6 +10,10 @@ import Photos
 final class PhotoCaptureProcessor: NSObject {
 
     private let onCaptureFinished: ((String?) -> Void)?
+    /// Set by the owner (`CaptureService`) to release this processor once the
+    /// capture has fully terminated (terminal delegate fired + Photos save done).
+    /// Lets the owner retain the delegate across the async save without leaking.
+    var onComplete: ((PhotoCaptureProcessor) -> Void)?
 
     /// Accumulated DNG data from the RAW photo output.
     private var rawData: Data?
@@ -63,21 +67,28 @@ extension PhotoCaptureProcessor: AVCapturePhotoCaptureDelegate {
         // Evaluate in priority order: capture-level error > processing error >
         // missing RAW data > success save path.
         if let error {
-            onCaptureFinished?(error.localizedDescription)
+            finish(error.localizedDescription)
             return
         }
 
         if let processingError = captureError {
-            onCaptureFinished?(processingError)
+            finish(processingError)
             return
         }
 
         guard let rawData else {
-            onCaptureFinished?("No RAW data received from capture.")
+            finish("No RAW data received from capture.")
             return
         }
 
         saveToPhotos(rawData: rawData, processedData: processedData)
+    }
+
+    /// Emits the capture result exactly once, then releases this processor via
+    /// `onComplete`. All terminal paths funnel through here.
+    private func finish(_ error: String?) {
+        onCaptureFinished?(error)
+        onComplete?(self)
     }
 
     // MARK: - Private: Photos library save
@@ -98,10 +109,10 @@ extension PhotoCaptureProcessor: AVCapturePhotoCaptureDelegate {
             }
         } completionHandler: { [weak self] success, error in
             if success {
-                self?.onCaptureFinished?(nil)
+                self?.finish(nil)
             } else {
                 let message = error?.localizedDescription ?? "Unknown Photos library error."
-                self?.onCaptureFinished?(message)
+                self?.finish(message)
             }
         }
     }

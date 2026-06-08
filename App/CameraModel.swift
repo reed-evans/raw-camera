@@ -1,6 +1,7 @@
 import CameraCore
 import CoreGraphics
 import Observation
+import simd
 
 // OWNER: wt/integration. The @Observable surface below is **FROZEN in Phase 0**
 // (orchestrator-mediated). UI worktrees bind to these properties and call these
@@ -56,16 +57,54 @@ public final class CameraModel {
     // MARK: Dependency
     @ObservationIgnored private let service: any CameraCapturing
 
+    // MARK: Integration glue (not part of the frozen @Observable surface)
+
+    /// Owns the frame conduit + histogram/motion producers, and writes the
+    /// monitoring-data properties on the main actor (CONTRACTS §6).
+    @ObservationIgnored let monitoring = MonitoringHub()
+
+    /// Frame conduit the `CameraMetalView` consumes. Capture feeds it via
+    /// `onVideoFrame`; the renderer registers its uploader into it.
+    @ObservationIgnored public var framePump: FramePump { monitoring.framePump }
+    /// Histogram producer the `CameraMetalView` renderer drives; delivered into
+    /// `histogram` on the main actor.
+    @ObservationIgnored public var histogramProducer: HistogramProducer { monitoring.histogramProducer }
+
+    /// Derived `PreviewUniforms` snapshot built from the model's monitoring
+    /// fields. The FROZEN ABI struct is never mutated structurally — only its
+    /// values are populated. `viewSize` is filled by the renderer per drawable.
+    @ObservationIgnored public var previewUniforms: PreviewUniforms {
+        PreviewUniforms(
+            peakingColor: monitoring.peakingColor,
+            viewSize: SIMD2<Float>(0, 0),
+            zebraThreshold: zebraThreshold,
+            peakingThreshold: focusPeakingThreshold,
+            rotation: monitoring.rotation,
+            zebraEnabled: zebraEnabled ? 1 : 0,
+            peakingEnabled: focusPeakingEnabled ? 1 : 0
+        )
+    }
+
     public init(service: any CameraCapturing) {
         self.service = service
         self.exposureLimits = service.exposureLimits
         self.isProRAWAvailable = service.isProRAWAvailable
         wireCallbacks()
+        monitoring.bind(to: self)
     }
 
-    /// Intake for the post-configuration limits and capture results. The service
-    /// fires these on a background queue; we hop to the main actor.
+    /// Intake for the post-configuration limits and capture results, plus the
+    /// frame conduit. The service fires callbacks on a background queue; observable
+    /// writes hop to the main actor. The frame conduit deliberately stays off-main:
+    /// `framePump.submit` hands the buffer straight to the renderer's uploader
+    /// within the call (the pool recycles it on return — no retain past return).
     private func wireCallbacks() {
+        // Frame conduit: a single onVideoFrame fans out to preview upload +
+        // histogram (both live inside the Metal renderer's uploader path).
+        let pump = monitoring.framePump
+        service.onVideoFrame = { pixelBuffer in
+            pump.submit(pixelBuffer)
+        }
         service.onConfigured = { [weak self] limits, proRAWAvailable in
             Task { @MainActor in
                 self?.exposureLimits = limits
@@ -80,8 +119,17 @@ public final class CameraModel {
     }
 
     // MARK: Intents (frozen signatures; integration completes the bodies)
-    public func startSession() { service.startSession() }
-    public func stopSession() { service.stopSession() }
+    public func startSession() {
+        service.startSession()
+        monitoring.startMotion()
+        isSessionRunning = true
+    }
+
+    public func stopSession() {
+        service.stopSession()
+        monitoring.stopMotion()
+        isSessionRunning = false
+    }
     public func capturePhoto() { service.capturePhoto() }
     public func focusTap(at point: CGPoint) { service.focus(at: point) }
 

@@ -30,6 +30,11 @@ final class CaptureService: NSObject, CameraCapturing {
     private var preferProRAW: Bool = true
     private var selectedRAWFormat: RAWFormat?
     private let logger = Logger(subsystem: "com.rawcamera", category: "CaptureService")
+    /// Active capture delegates, retained across the async Photos save so
+    /// `onCaptureFinished` is never dropped. AVFoundation does not retain the
+    /// delegate, so we own it here and release it when the capture terminates.
+    /// Mutated only on `sessionQueue`.
+    private var activeProcessors: Set<PhotoCaptureProcessor> = []
 
     // MARK: Session lifecycle
 
@@ -278,6 +283,13 @@ extension CaptureService {
         }
         let settings = buildCaptureSettings(photoOutput: photoOutput)
         let processor = PhotoCaptureProcessor(onCaptureFinished: onCaptureFinished)
+        // Retain the delegate across the async Photos save; release it when the
+        // capture terminates so it isn't deallocated mid-flight (and the result
+        // isn't dropped). `completion` and the set mutation stay on sessionQueue.
+        processor.onComplete = { [weak self] finished in
+            self?.sessionQueue.async { self?.activeProcessors.remove(finished) }
+        }
+        activeProcessors.insert(processor)
         photoOutput.capturePhoto(with: settings, delegate: processor)
     }
 
