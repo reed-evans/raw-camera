@@ -23,13 +23,13 @@ final class CaptureService: NSObject, CameraCapturing {
 
     // MARK: Private state
 
-    let sessionQueue = DispatchQueue(label: "com.rawcamera.sessionQueue", qos: .userInitiated)
-    let session = AVCaptureSession()
-    var videoDevice: AVCaptureDevice?
-    var photoOutput: AVCapturePhotoOutput?
-    var preferProRAW: Bool = true
-    var selectedRAWFormat: RAWFormat?
-    let logger = Logger(subsystem: "com.rawcamera", category: "CaptureService")
+    private let sessionQueue = DispatchQueue(label: "com.rawcamera.sessionQueue", qos: .userInitiated)
+    private let session = AVCaptureSession()
+    private var videoDevice: AVCaptureDevice?
+    private var photoOutput: AVCapturePhotoOutput?
+    private var preferProRAW: Bool = true
+    private var selectedRAWFormat: RAWFormat?
+    private let logger = Logger(subsystem: "com.rawcamera", category: "CaptureService")
 
     // MARK: Session lifecycle
 

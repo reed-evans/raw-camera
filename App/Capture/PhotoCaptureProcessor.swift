@@ -17,6 +17,9 @@ final class PhotoCaptureProcessor: NSObject {
     private var processedData: Data?
     /// Whether the capture settings requested a ProRAW output.
     private var isProRAWCapture: Bool = false
+    /// Stores the first error from `didFinishProcessingPhoto` so that
+    /// `didFinishCaptureFor` can fire `onCaptureFinished` exactly once.
+    private var captureError: String?
 
     init(onCaptureFinished: ((String?) -> Void)?) {
         self.onCaptureFinished = onCaptureFinished
@@ -33,7 +36,9 @@ extension PhotoCaptureProcessor: AVCapturePhotoCaptureDelegate {
         error: Error?
     ) {
         if let error {
-            onCaptureFinished?(error.localizedDescription)
+            // Store the error; do NOT fire onCaptureFinished here.
+            // didFinishCaptureFor always fires last and will emit exactly one callback.
+            captureError = error.localizedDescription
             return
         }
 
@@ -54,8 +59,16 @@ extension PhotoCaptureProcessor: AVCapturePhotoCaptureDelegate {
         didFinishCaptureFor resolvedSettings: AVCaptureResolvedPhotoSettings,
         error: Error?
     ) {
+        // Terminal delegate method — fires exactly once per capture.
+        // Evaluate in priority order: capture-level error > processing error >
+        // missing RAW data > success save path.
         if let error {
             onCaptureFinished?(error.localizedDescription)
+            return
+        }
+
+        if let processingError = captureError {
+            onCaptureFinished?(processingError)
             return
         }
 
