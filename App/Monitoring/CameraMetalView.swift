@@ -110,14 +110,10 @@ struct CameraMetalView: UIViewRepresentable {
     }
 
     func updateUIView(_ uiView: MTKView, context: Context) {
-        // Snapshot the (main-actor) monitoring controls into the renderer's
-        // uniforms. The renderer reads these on its private queue under a lock.
-        context.coordinator.updateUniforms(
-            zebraEnabled: model.zebraEnabled,
-            zebraThreshold: model.zebraThreshold,
-            peakingEnabled: model.focusPeakingEnabled,
-            peakingThreshold: model.focusPeakingThreshold
-        )
+        // Snapshot the (main-actor) monitoring controls into the renderer via the
+        // integration node's derived `PreviewUniforms` (toggles, thresholds,
+        // peakingColor, rotation). The renderer keeps `viewSize` per-drawable.
+        context.coordinator.updateUniforms(model.previewUniforms)
     }
 }
 
@@ -223,18 +219,14 @@ final class MetalRenderer: NSObject, MTKViewDelegate, @unchecked Sendable {
 
     // MARK: Public API (main actor)
 
-    /// Snapshot monitoring controls into the uniforms used by the next frame.
-    func updateUniforms(
-        zebraEnabled: Bool,
-        zebraThreshold: Float,
-        peakingEnabled: Bool,
-        peakingThreshold: Float
-    ) {
+    /// Snapshot the integration node's derived `PreviewUniforms` for the next
+    /// frame. Everything except `viewSize` (renderer-owned, per-drawable) is taken
+    /// from the model snapshot; the FROZEN struct is copied wholesale, not mutated.
+    func updateUniforms(_ snapshot: PreviewUniforms) {
         stateLock.lock()
-        uniforms.zebraEnabled = zebraEnabled ? 1 : 0
-        uniforms.zebraThreshold = zebraThreshold
-        uniforms.peakingEnabled = peakingEnabled ? 1 : 0
-        uniforms.peakingThreshold = peakingThreshold
+        let viewSize = uniforms.viewSize
+        uniforms = snapshot
+        uniforms.viewSize = viewSize
         stateLock.unlock()
     }
 

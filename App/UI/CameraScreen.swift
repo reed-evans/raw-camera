@@ -12,8 +12,28 @@ struct CameraScreen: View {
 
     var body: some View {
         ZStack {
-            CameraMetalView(model: model)
+            GeometryReader { proxy in
+                CameraMetalView(
+                    model: model,
+                    histogramProducer: model.histogramProducer,
+                    framePump: model.framePump
+                )
                 .ignoresSafeArea()
+                .contentShape(Rectangle())
+                .onTapGesture { location in
+                    // Normalized device coords (0...1, top-left origin) per the
+                    // CameraCapturing.focus(at:) contract.
+                    let size = proxy.size
+                    guard size.width > 0, size.height > 0 else { return }
+                    model.focusTap(
+                        at: CGPoint(
+                            x: location.x / size.width,
+                            y: location.y / size.height
+                        )
+                    )
+                }
+            }
+            .ignoresSafeArea()
 
             VStack {
                 if model.levelGuideEnabled {
@@ -30,7 +50,11 @@ struct CameraScreen: View {
                 ControlsPanel(model: model)
             }
         }
-        .onAppear { model.startSession() }
+        .statusBarHidden(true)
+        .onAppear {
+            Permissions.requestCaptureAccess()
+            model.startSession()
+        }
         .onDisappear { model.stopSession() }
     }
 }
