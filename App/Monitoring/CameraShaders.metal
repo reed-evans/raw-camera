@@ -27,9 +27,14 @@ struct VertexOut {
     float2 uv;
 };
 
-// Phase-0 passthrough fullscreen-triangle shaders so T0-2 compiles green.
-// The metal worker replaces the fragment stage with the real preview + zebra +
-// focus-peaking sampling driven by `uniforms`.
+// Rec. 709 luma — matches the luma channel computed by the histogram kernel.
+inline float luma709(float3 rgb) {
+    return dot(rgb, float3(0.2126, 0.7152, 0.0722));
+}
+
+// Full-screen triangle. `rotation` (radians) is applied to clip-space position
+// so the preview matches device orientation; UVs are left unrotated so texture
+// sampling stays aligned to the camera texture.
 vertex VertexOut preview_vertex(uint vid [[vertex_id]],
                                 constant PreviewUniforms &uniforms [[buffer(0)]]) {
     float2 positions[3] = { float2(-1.0, -3.0), float2(-1.0, 1.0), float2(3.0, 1.0) };
@@ -43,10 +48,84 @@ vertex VertexOut preview_vertex(uint vid [[vertex_id]],
     return out;
 }
 
+// Preview fragment with two monitoring overlays driven by `uniforms`:
+//   (a) zebra — diagonal stripes where luma >= zebraThreshold (zebraEnabled).
+//   (b) focus peaking — peakingColor over high-gradient edges where local edge
+//       energy >= peakingThreshold (peakingEnabled).
 fragment float4 preview_fragment(VertexOut in [[stage_in]],
                                  constant PreviewUniforms &uniforms [[buffer(0)]],
                                  texture2d<float> frame [[texture(0)]]) {
     constexpr sampler s(address::clamp_to_edge, filter::linear);
     float4 color = frame.sample(s, in.uv);
+
+    // --- (b) Focus peaking: Sobel-style edge energy on luma. ---
+    if (uniforms.peakingEnabled != 0u) {
+        // One-texel step in UV space (guard against a zero viewSize).
+        float2 px = max(uniforms.viewSize, float2(1.0, 1.0));
+        float2 texel = 1.0 / px;
+
+        float lTL = luma709(frame.sample(s, in.uv + texel * float2(-1.0, -1.0)).rgb);
+        float lT  = luma709(frame.sample(s, in.uv + texel * float2( 0.0, -1.0)).rgb);
+        float lTR = luma709(frame.sample(s, in.uv + texel * float2( 1.0, -1.0)).rgb);
+        float lL  = luma709(frame.sample(s, in.uv + texel * float2(-1.0,  0.0)).rgb);
+        float lR  = luma709(frame.sample(s, in.uv + texel * float2( 1.0,  0.0)).rgb);
+        float lBL = luma709(frame.sample(s, in.uv + texel * float2(-1.0,  1.0)).rgb);
+        float lB  = luma709(frame.sample(s, in.uv + texel * float2( 0.0,  1.0)).rgb);
+        float lBR = luma709(frame.sample(s, in.uv + texel * float2( 1.0,  1.0)).rgb);
+
+        float gx = (lTR + 2.0 * lR + lBR) - (lTL + 2.0 * lL + lBL);
+        float gy = (lBL + 2.0 * lB + lBR) - (lTL + 2.0 * lT + lTR);
+        float edge = length(float2(gx, gy));
+
+        if (edge >= uniforms.peakingThreshold) {
+            float a = clamp(uniforms.peakingColor.a, 0.0, 1.0);
+            color.rgb = mix(color.rgb, uniforms.peakingColor.rgb, a);
+        }
+    }
+
+    // --- (a) Zebra: diagonal stripes over blown highlights. ---
+    if (uniforms.zebraEnabled != 0u) {
+        float y = luma709(color.rgb);
+        if (y >= uniforms.zebraThreshold) {
+            // Diagonal stripe in drawable-pixel space; period ~10px.
+            float2 fragPx = in.position.xy;
+            float stripe = fract((fragPx.x + fragPx.y) / 10.0);
+            if (stripe < 0.5) {
+                color.rgb = float3(0.0);  // dark bar of the zebra pattern
+            }
+        }
+    }
+
     return color;
+}
+
+// ----------------------------------------------------------------------------
+// Histogram compute kernel.
+//
+// Accumulates per-channel + luma bin counts (256 bins each) into a single
+// `uint` buffer laid out as 4 contiguous 256-entry sections:
+//   [0..255]   red, [256..511] green, [512..767] blue, [768..1023] luma.
+// The CPU clears the buffer each frame, dispatches over the texture, reads the
+// raw counts back, and feeds them to `CameraCore.Histogram.normalize`.
+// Uses atomics so concurrent threads accumulate correctly.
+// ----------------------------------------------------------------------------
+constant uint kHistogramBins = 256u;
+
+kernel void histogram_accumulate(texture2d<float> frame [[texture(0)]],
+                                 device atomic_uint *bins [[buffer(0)]],
+                                 uint2 gid [[thread_position_in_grid]]) {
+    if (gid.x >= frame.get_width() || gid.y >= frame.get_height()) {
+        return;
+    }
+    float4 c = frame.read(gid);
+
+    uint r = uint(clamp(c.r, 0.0, 1.0) * 255.0 + 0.5);
+    uint g = uint(clamp(c.g, 0.0, 1.0) * 255.0 + 0.5);
+    uint b = uint(clamp(c.b, 0.0, 1.0) * 255.0 + 0.5);
+    uint y = uint(clamp(luma709(c.rgb), 0.0, 1.0) * 255.0 + 0.5);
+
+    atomic_fetch_add_explicit(&bins[r], 1u, memory_order_relaxed);
+    atomic_fetch_add_explicit(&bins[kHistogramBins + g], 1u, memory_order_relaxed);
+    atomic_fetch_add_explicit(&bins[2u * kHistogramBins + b], 1u, memory_order_relaxed);
+    atomic_fetch_add_explicit(&bins[3u * kHistogramBins + y], 1u, memory_order_relaxed);
 }
