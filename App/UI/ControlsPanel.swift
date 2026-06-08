@@ -57,19 +57,25 @@ private struct ShutterRow: View {
 private struct ShutterButton: View {
     let isRunning: Bool
     let action: () -> Void
-    @State private var isPressed = false
 
     var body: some View {
         Button(action: action) {
             ZStack {
                 Circle().strokeBorder(Color.white.opacity(0.6), lineWidth: 3).frame(width: 52, height: 52)
                 Circle().fill(isRunning ? Color.white : Color.white.opacity(0.25))
-                    .frame(width: 42, height: 42).scaleEffect(isPressed ? 0.88 : 1.0)
+                    .frame(width: 42, height: 42)
             }
         }
-        .buttonStyle(.plain).disabled(!isRunning).opacity(isRunning ? 1.0 : 0.45)
-        .animation(.easeOut(duration: 0.12), value: isPressed)
-        ._onButtonGesture(pressing: { pressing in isPressed = pressing }, perform: {})
+        .buttonStyle(ShutterButtonStyle())
+        .disabled(!isRunning).opacity(isRunning ? 1.0 : 0.45)
+    }
+}
+
+private struct ShutterButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.88 : 1.0)
+            .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
     }
 }
 
@@ -87,7 +93,11 @@ private struct ExposureSection: View {
 
     var body: some View {
         CamSection(label: "EXPOSURE") {
-            ModeSegment(isManual: $model.isManualExposure, onDisable: model.enableAutoExposure)
+            ModeSegment(
+                isManual: $model.isManualExposure,
+                onDisable: model.enableAutoExposure,
+                onEnable: { model.setManualExposure(iso: model.iso, shutterSeconds: model.shutterSeconds) }
+            )
             if model.isManualExposure {
                 VStack(spacing: 8) {
                     FSlider(
@@ -115,7 +125,11 @@ private struct WhiteBalanceSection: View {
 
     var body: some View {
         CamSection(label: "WHITE BAL") {
-            ModeSegment(isManual: $model.isManualWhiteBalance, onDisable: model.enableAutoWhiteBalance)
+            ModeSegment(
+                isManual: $model.isManualWhiteBalance,
+                onDisable: model.enableAutoWhiteBalance,
+                onEnable: { model.setWhiteBalance(temperature: model.whiteBalanceTemperature, tint: model.whiteBalanceTint) }
+            )
             if model.isManualWhiteBalance {
                 VStack(spacing: 8) {
                     FSlider(
@@ -143,7 +157,11 @@ private struct FocusSection: View {
 
     var body: some View {
         CamSection(label: "FOCUS") {
-            ModeSegment(isManual: $model.isManualFocus, onDisable: model.enableAutoFocus)
+            ModeSegment(
+                isManual: $model.isManualFocus,
+                onDisable: model.enableAutoFocus,
+                onEnable: { model.setFocus(lensPosition: model.focusLensPosition) }
+            )
             if model.isManualFocus {
                 FSlider(
                     label: "MF", range: CameraModel.lensPositionRange,
@@ -224,11 +242,12 @@ private struct CamSection<C: View>: View {
 private struct ModeSegment: View {
     @Binding var isManual: Bool
     let onDisable: () -> Void
+    let onEnable: () -> Void
 
     var body: some View {
         HStack(spacing: 0) {
             segBtn("A", active: !isManual) { if isManual { onDisable(); isManual = false } }
-            segBtn("M", active: isManual) { if !isManual { isManual = true } }
+            segBtn("M", active: isManual) { if !isManual { isManual = true; onEnable() } }
         }
         .background(Color.white.opacity(0.06))
         .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
