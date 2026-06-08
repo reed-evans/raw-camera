@@ -1,17 +1,372 @@
 import CameraCore
 import SwiftUI
 
-// OWNER: wt/controls-ui. Phase-0 stub. Binds sliders/toggles to the frozen
-// `CameraModel` surface only — no capture logic lives here.
+// OWNER: wt/controls-ui. Dark-luxury editorial camera control surface.
+
+// MARK: - ControlsPanel
+
 struct ControlsPanel: View {
     @Bindable var model: CameraModel
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Controls")
-                .font(.headline)
-            // TODO(wt/controls-ui): shutter, ISO, WB, focus controls + auto/manual toggles.
+        VStack(spacing: 0) {
+            ShutterRow(model: model).padding(.horizontal, 20).padding(.vertical, 12)
+            Divider().overlay(Color.white.opacity(0.12))
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(alignment: .top, spacing: 20) {
+                    ExposureSection(model: model)
+                    vLine; WhiteBalanceSection(model: model)
+                    vLine; FocusSection(model: model)
+                    vLine; MonitoringSection(model: model)
+                    vLine; FormatSection(model: model)
+                }
+                .padding(.horizontal, 20).padding(.vertical, 12)
+            }
         }
-        .padding()
+        .background(.ultraThinMaterial)
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .shadow(color: .black.opacity(0.45), radius: 24, x: 0, y: -4)
+    }
+
+    private var vLine: some View {
+        Rectangle().fill(Color.white.opacity(0.1)).frame(width: 1).frame(maxHeight: .infinity)
     }
 }
+
+private struct ShutterRow: View {
+    @Bindable var model: CameraModel
+
+    var body: some View {
+        HStack(spacing: 16) {
+            Group {
+                if let err = model.lastCaptureError {
+                    Label(err, systemImage: "exclamationmark.triangle.fill")
+                        .font(.caption2).foregroundStyle(.red).lineLimit(1)
+                        .transition(.opacity.combined(with: .move(edge: .leading)))
+                } else {
+                    Color.clear.frame(height: 20)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .animation(.easeInOut(duration: 0.2), value: model.lastCaptureError)
+            ShutterButton(isRunning: model.isSessionRunning, action: model.capturePhoto)
+        }
+    }
+}
+
+private struct ShutterButton: View {
+    let isRunning: Bool
+    let action: () -> Void
+    @State private var isPressed = false
+
+    var body: some View {
+        Button(action: action) {
+            ZStack {
+                Circle().strokeBorder(Color.white.opacity(0.6), lineWidth: 3).frame(width: 52, height: 52)
+                Circle().fill(isRunning ? Color.white : Color.white.opacity(0.25))
+                    .frame(width: 42, height: 42).scaleEffect(isPressed ? 0.88 : 1.0)
+            }
+        }
+        .buttonStyle(.plain).disabled(!isRunning).opacity(isRunning ? 1.0 : 0.45)
+        .animation(.easeOut(duration: 0.12), value: isPressed)
+        ._onButtonGesture(pressing: { pressing in isPressed = pressing }, perform: {})
+    }
+}
+
+private struct ExposureSection: View {
+    @Bindable var model: CameraModel
+
+    private var isoRange: ClosedRange<Float> {
+        let lo = model.exposureLimits.minISO, hi = model.exposureLimits.maxISO
+        return hi > lo ? lo...hi : 50...3200
+    }
+    private var shutterRange: ClosedRange<Double> {
+        let lo = model.exposureLimits.minShutterSeconds, hi = model.exposureLimits.maxShutterSeconds
+        return hi > lo ? lo...hi : (1.0 / 8000)...(30.0)
+    }
+
+    var body: some View {
+        CamSection(label: "EXPOSURE") {
+            ModeSegment(isManual: $model.isManualExposure, onDisable: model.enableAutoExposure)
+            if model.isManualExposure {
+                VStack(spacing: 8) {
+                    FSlider(
+                        label: "ISO", range: isoRange,
+                        value: Binding(
+                            get: { model.iso },
+                            set: { model.setManualExposure(iso: $0, shutterSeconds: model.shutterSeconds) }),
+                        display: "ISO \(Int(model.iso.rounded()))")
+                    DSlider(
+                        label: "SS", range: shutterRange,
+                        value: Binding(
+                            get: { model.shutterSeconds },
+                            set: { model.setManualExposure(iso: model.iso, shutterSeconds: $0) }),
+                        display: model.shutterSeconds >= 1
+                            ? String(format: "%.1fs", model.shutterSeconds)
+                            : "1/\(Int((1.0 / model.shutterSeconds).rounded()))")
+                }.transition(.opacity.combined(with: .offset(y: 4)))
+            }
+        }.animation(.easeInOut(duration: 0.18), value: model.isManualExposure)
+    }
+}
+
+private struct WhiteBalanceSection: View {
+    @Bindable var model: CameraModel
+
+    var body: some View {
+        CamSection(label: "WHITE BAL") {
+            ModeSegment(isManual: $model.isManualWhiteBalance, onDisable: model.enableAutoWhiteBalance)
+            if model.isManualWhiteBalance {
+                VStack(spacing: 8) {
+                    FSlider(
+                        label: "K", range: CameraModel.temperatureRange,
+                        value: Binding(
+                            get: { model.whiteBalanceTemperature },
+                            set: { model.setWhiteBalance(temperature: $0, tint: model.whiteBalanceTint) }),
+                        display: "\(Int(model.whiteBalanceTemperature.rounded()))K")
+                    FSlider(
+                        label: "TINT", range: CameraModel.tintRange,
+                        value: Binding(
+                            get: { model.whiteBalanceTint },
+                            set: { model.setWhiteBalance(temperature: model.whiteBalanceTemperature, tint: $0) }),
+                        display: {
+                            let i = Int(model.whiteBalanceTint.rounded()); return i >= 0 ? "+\(i)" : "\(i)"
+                        }())
+                }.transition(.opacity.combined(with: .offset(y: 4)))
+            }
+        }.animation(.easeInOut(duration: 0.18), value: model.isManualWhiteBalance)
+    }
+}
+
+private struct FocusSection: View {
+    @Bindable var model: CameraModel
+
+    var body: some View {
+        CamSection(label: "FOCUS") {
+            ModeSegment(isManual: $model.isManualFocus, onDisable: model.enableAutoFocus)
+            if model.isManualFocus {
+                FSlider(
+                    label: "MF", range: CameraModel.lensPositionRange,
+                    value: Binding(get: { model.focusLensPosition }, set: { model.setFocus(lensPosition: $0) }),
+                    display: String(format: "%.2f", model.focusLensPosition)
+                )
+                .transition(.opacity.combined(with: .offset(y: 4)))
+            }
+        }.animation(.easeInOut(duration: 0.18), value: model.isManualFocus)
+    }
+}
+
+private struct MonitoringSection: View {
+    @Bindable var model: CameraModel
+
+    var body: some View {
+        CamSection(label: "MONITOR") {
+            VStack(spacing: 8) {
+                MonRow(label: "ZEBRA", isOn: $model.zebraEnabled)
+                if model.zebraEnabled {
+                    ThreshRow(value: $model.zebraThreshold).transition(.opacity.combined(with: .offset(y: 4)))
+                }
+                MonRow(label: "PEAK", isOn: $model.focusPeakingEnabled)
+                if model.focusPeakingEnabled {
+                    ThreshRow(value: $model.focusPeakingThreshold).transition(.opacity.combined(with: .offset(y: 4)))
+                }
+                MonRow(label: "HIST", isOn: $model.histogramEnabled)
+                MonRow(label: "LEVEL", isOn: $model.levelGuideEnabled)
+            }
+            .animation(.easeInOut(duration: 0.18), value: model.zebraEnabled)
+            .animation(.easeInOut(duration: 0.18), value: model.focusPeakingEnabled)
+        }
+    }
+}
+
+private struct FormatSection: View {
+    @Bindable var model: CameraModel
+    private var proRawActive: Bool { model.preferProRAW && model.isProRAWAvailable }
+
+    var body: some View {
+        CamSection(label: "FORMAT") {
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 8) {
+                    Text("ProRAW")
+                        .font(.system(size: 10, weight: .bold, design: .monospaced))
+                        .foregroundStyle(proRawActive ? Color.black : Color.white.opacity(0.5))
+                        .padding(.horizontal, 6).padding(.vertical, 3)
+                        .background(proRawActive ? Color.white : Color.white.opacity(0.1))
+                        .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
+                        .animation(.easeOut(duration: 0.15), value: proRawActive)
+                    Toggle("", isOn: Binding(get: { model.preferProRAW }, set: { model.setPreferProRAW($0) }))
+                        .labelsHidden().toggleStyle(MiniToggleStyle())
+                        .disabled(!model.isProRAWAvailable).opacity(model.isProRAWAvailable ? 1.0 : 0.35)
+                }
+                Text(model.isProRAWAvailable ? "available" : "unavailable")
+                    .font(.system(size: 9, weight: .medium, design: .monospaced))
+                    .foregroundStyle(model.isProRAWAvailable ? Color.green.opacity(0.8) : Color.white.opacity(0.35))
+            }
+        }
+    }
+}
+
+// MARK: - Primitives
+
+private struct CamSection<C: View>: View {
+    let label: String
+    @ViewBuilder let content: C
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(label).font(.system(size: 9, weight: .semibold, design: .monospaced))
+                .tracking(1.2).foregroundStyle(Color.white.opacity(0.45))
+            content
+        }.frame(minWidth: 90, alignment: .leading)
+    }
+}
+
+private struct ModeSegment: View {
+    @Binding var isManual: Bool
+    let onDisable: () -> Void
+
+    var body: some View {
+        HStack(spacing: 0) {
+            segBtn("A", active: !isManual) { if isManual { onDisable(); isManual = false } }
+            segBtn("M", active: isManual) { if !isManual { isManual = true } }
+        }
+        .background(Color.white.opacity(0.06))
+        .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                .strokeBorder(Color.white.opacity(0.12), lineWidth: 0.5))
+    }
+
+    @ViewBuilder
+    private func segBtn(_ title: String, active: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(title).font(.system(size: 10, weight: .semibold, design: .monospaced))
+                .foregroundStyle(active ? Color.black : Color.white.opacity(0.5))
+                .frame(width: 28, height: 20)
+                .background(active ? Color.white : Color.clear)
+                .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
+        }.buttonStyle(.plain).animation(.easeOut(duration: 0.12), value: active)
+    }
+}
+
+private struct FSlider: View {
+    let label: String; let range: ClosedRange<Float>; @Binding var value: Float; let display: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            HStack {
+                Text(label).font(.system(size: 9, weight: .medium, design: .monospaced)).foregroundStyle(Color.white.opacity(0.4))
+                Spacer()
+                Text(display).font(.system(size: 10, weight: .semibold, design: .monospaced)).foregroundStyle(Color.white.opacity(0.85))
+            }
+            Slider(value: $value, in: range).tint(.white).frame(width: 120)
+        }
+    }
+}
+
+private struct DSlider: View {
+    let label: String; let range: ClosedRange<Double>; @Binding var value: Double; let display: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            HStack {
+                Text(label).font(.system(size: 9, weight: .medium, design: .monospaced)).foregroundStyle(Color.white.opacity(0.4))
+                Spacer()
+                Text(display).font(.system(size: 10, weight: .semibold, design: .monospaced)).foregroundStyle(Color.white.opacity(0.85))
+            }
+            Slider(value: $value, in: range).tint(.white).frame(width: 120)
+        }
+    }
+}
+
+private struct MonRow: View {
+    let label: String; @Binding var isOn: Bool
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Text(label).font(.system(size: 9, weight: .semibold, design: .monospaced)).tracking(0.8)
+                .foregroundStyle(isOn ? Color.white.opacity(0.9) : Color.white.opacity(0.4))
+                .frame(width: 36, alignment: .leading).animation(.easeOut(duration: 0.12), value: isOn)
+            Toggle("", isOn: $isOn).labelsHidden().toggleStyle(MiniToggleStyle())
+        }
+    }
+}
+
+private struct ThreshRow: View {
+    @Binding var value: Float
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Text("THR").font(.system(size: 9, weight: .medium, design: .monospaced))
+                .foregroundStyle(Color.white.opacity(0.35)).frame(width: 24, alignment: .leading)
+            Slider(value: $value, in: 0...1).tint(Color.white.opacity(0.7)).frame(width: 80)
+            Text(String(format: "%.0f%%", value * 100))
+                .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                .foregroundStyle(Color.white.opacity(0.65)).frame(width: 28, alignment: .trailing)
+        }
+    }
+}
+
+private struct MiniToggleStyle: ToggleStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        let on = configuration.isOn
+        ZStack {
+            Capsule().fill(on ? Color.white.opacity(0.9) : Color.white.opacity(0.15)).frame(width: 34, height: 18)
+            Circle().fill(on ? Color.black : Color.white.opacity(0.6)).frame(width: 14, height: 14).offset(x: on ? 8 : -8)
+        }
+        .animation(.easeOut(duration: 0.14), value: on)
+        .onTapGesture { configuration.isOn.toggle() }
+    }
+}
+
+// MARK: - Preview
+
+#if DEBUG
+    private final class StubCapturing: CameraCapturing {
+        var onVideoFrame: ((CVPixelBuffer) -> Void)?
+        var onConfigured: ((ExposureLimits, Bool) -> Void)?
+        var onCaptureFinished: ((String?) -> Void)?
+        var exposureLimits = ExposureLimits(
+            minISO: 25, maxISO: 6400,
+            minShutterSeconds: 1.0 / 8000, maxShutterSeconds: 30.0
+        )
+        var isProRAWAvailable: Bool = true
+        func startSession() {}
+        func stopSession() {}
+        func capturePhoto() {}
+        func focus(at point: CGPoint) {}
+        func setManualExposure(iso: Float, shutterSeconds: Double) {}
+        func setAutoExposure() {}
+        func setWhiteBalance(_ gains: WhiteBalanceGains) {}
+        func setAutoWhiteBalance() {}
+        func setFocus(lensPosition: Float) {}
+        func setAutoFocus() {}
+        func setPreferProRAW(_ prefer: Bool) {}
+    }
+
+    #Preview("auto") {
+        ZStack {
+            Color.black.ignoresSafeArea()
+            VStack {
+                Spacer()
+                ControlsPanel(model: CameraModel(service: StubCapturing())).padding()
+            }
+        }.preferredColorScheme(.dark)
+    }
+
+    #Preview("manual") {
+        let model = CameraModel(service: StubCapturing())
+        model.isManualExposure = true
+        model.isManualWhiteBalance = true
+        model.isManualFocus = true
+        model.zebraEnabled = true
+        model.focusPeakingEnabled = true
+        return ZStack {
+            Color.black.ignoresSafeArea()
+            VStack {
+                Spacer()
+                ControlsPanel(model: model).padding()
+            }
+        }.preferredColorScheme(.dark)
+    }
+#endif
