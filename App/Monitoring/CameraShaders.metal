@@ -56,22 +56,43 @@ fragment float4 preview_fragment(VertexOut in [[stage_in]],
                                  constant PreviewUniforms &uniforms [[buffer(0)]],
                                  texture2d<float> frame [[texture(0)]]) {
     constexpr sampler s(address::clamp_to_edge, filter::linear);
-    float4 color = frame.sample(s, in.uv);
+
+    // Aspect-fit (letterbox): show the WHOLE camera frame without stretching, so
+    // the preview matches the captured photo in any orientation. Expand the UVs
+    // on the axis that needs bars; anything outside [0,1] is a black bar. Uses the
+    // real texture + drawable dimensions, so it adapts as the device rotates.
+    float texW = float(frame.get_width());
+    float texH = float(frame.get_height());
+    float2 vs = max(uniforms.viewSize, float2(1.0, 1.0));
+    float2 uv = in.uv;
+    if (texW > 0.0 && texH > 0.0) {
+        float texAspect = texW / texH;
+        float viewAspect = vs.x / vs.y;
+        if (viewAspect > texAspect) {
+            uv.x = (uv.x - 0.5) * (viewAspect / texAspect) + 0.5;  // pillarbox
+        } else {
+            uv.y = (uv.y - 0.5) * (texAspect / viewAspect) + 0.5;  // letterbox
+        }
+    }
+    if (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0) {
+        return float4(0.0, 0.0, 0.0, 1.0);  // bar region
+    }
+
+    float4 color = frame.sample(s, uv);
 
     // --- (b) Focus peaking: Sobel-style edge energy on luma. ---
     if (uniforms.peakingEnabled != 0u) {
-        // One-texel step in UV space (guard against a zero viewSize).
-        float2 px = max(uniforms.viewSize, float2(1.0, 1.0));
-        float2 texel = 1.0 / px;
+        // One-texel step in texture space, sampling around the aspect-fit `uv`.
+        float2 texel = 1.0 / float2(max(texW, 1.0), max(texH, 1.0));
 
-        float lTL = luma709(frame.sample(s, in.uv + texel * float2(-1.0, -1.0)).rgb);
-        float lT  = luma709(frame.sample(s, in.uv + texel * float2( 0.0, -1.0)).rgb);
-        float lTR = luma709(frame.sample(s, in.uv + texel * float2( 1.0, -1.0)).rgb);
-        float lL  = luma709(frame.sample(s, in.uv + texel * float2(-1.0,  0.0)).rgb);
-        float lR  = luma709(frame.sample(s, in.uv + texel * float2( 1.0,  0.0)).rgb);
-        float lBL = luma709(frame.sample(s, in.uv + texel * float2(-1.0,  1.0)).rgb);
-        float lB  = luma709(frame.sample(s, in.uv + texel * float2( 0.0,  1.0)).rgb);
-        float lBR = luma709(frame.sample(s, in.uv + texel * float2( 1.0,  1.0)).rgb);
+        float lTL = luma709(frame.sample(s, uv + texel * float2(-1.0, -1.0)).rgb);
+        float lT  = luma709(frame.sample(s, uv + texel * float2( 0.0, -1.0)).rgb);
+        float lTR = luma709(frame.sample(s, uv + texel * float2( 1.0, -1.0)).rgb);
+        float lL  = luma709(frame.sample(s, uv + texel * float2(-1.0,  0.0)).rgb);
+        float lR  = luma709(frame.sample(s, uv + texel * float2( 1.0,  0.0)).rgb);
+        float lBL = luma709(frame.sample(s, uv + texel * float2(-1.0,  1.0)).rgb);
+        float lB  = luma709(frame.sample(s, uv + texel * float2( 0.0,  1.0)).rgb);
+        float lBR = luma709(frame.sample(s, uv + texel * float2( 1.0,  1.0)).rgb);
 
         float gx = (lTR + 2.0 * lR + lBR) - (lTL + 2.0 * lL + lBL);
         float gy = (lBL + 2.0 * lB + lBR) - (lTL + 2.0 * lT + lTR);
