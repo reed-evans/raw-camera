@@ -35,7 +35,7 @@ struct CameraScreen: View {
             }
             .ignoresSafeArea()
 
-            VStack {
+            VStack(spacing: 10) {
                 if model.levelGuideEnabled {
                     LevelGuideView(
                         rollDegrees: model.rollDegrees,
@@ -46,8 +46,11 @@ struct CameraScreen: View {
                 Spacer()
                 if model.histogramEnabled {
                     HistogramView(histogram: model.histogram)
+                        .padding(.horizontal, 12)
                 }
                 ControlsPanel(model: model)
+                    .padding(.horizontal, 12)
+                    .padding(.bottom, 6)
             }
         }
         .statusBarHidden(true)

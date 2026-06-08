@@ -5,51 +5,87 @@ import SwiftUI
 
 // MARK: - ControlsPanel
 
+/// Compact, collapsible camera control surface. A slim command bar (status ·
+/// shutter · settings toggle) stays docked at the bottom while shooting; the full
+/// settings slide up on demand and tuck away again, keeping the preview clear.
 struct ControlsPanel: View {
     @Bindable var model: CameraModel
+    @State private var showSettings = false
 
     var body: some View {
         VStack(spacing: 0) {
-            ShutterRow(model: model).padding(.horizontal, 20).padding(.vertical, 12)
-            Divider().overlay(Color.white.opacity(0.12))
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(alignment: .top, spacing: 20) {
-                    ExposureSection(model: model)
-                    vLine; WhiteBalanceSection(model: model)
-                    vLine; FocusSection(model: model)
-                    vLine; MonitoringSection(model: model)
-                    vLine; FormatSection(model: model)
-                }
-                .padding(.horizontal, 20).padding(.vertical, 12)
+            if showSettings {
+                settingsDrawer
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
             }
+            commandBar
         }
         .background(.ultraThinMaterial)
-        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .strokeBorder(Color.white.opacity(0.08), lineWidth: 0.5)
+        )
         .shadow(color: .black.opacity(0.45), radius: 24, x: 0, y: -4)
+        .animation(.spring(response: 0.34, dampingFraction: 0.86), value: showSettings)
     }
 
-    private var vLine: some View {
-        Rectangle().fill(Color.white.opacity(0.1)).frame(width: 1).frame(maxHeight: .infinity)
-    }
-}
-
-private struct ShutterRow: View {
-    @Bindable var model: CameraModel
-
-    var body: some View {
-        HStack(spacing: 16) {
-            Group {
-                if let err = model.lastCaptureError {
-                    Label(err, systemImage: "exclamationmark.triangle.fill")
-                        .font(.caption2).foregroundStyle(.red).lineLimit(1)
-                        .transition(.opacity.combined(with: .move(edge: .leading)))
-                } else {
-                    Color.clear.frame(height: 20)
-                }
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .animation(.easeInOut(duration: 0.2), value: model.lastCaptureError)
+    /// Slim, always-docked bar: status (left) · shutter (center) · settings toggle (right).
+    private var commandBar: some View {
+        HStack(spacing: 14) {
+            statusChip.frame(maxWidth: .infinity, alignment: .leading)
             ShutterButton(isRunning: model.isSessionRunning, action: model.capturePhoto)
+            settingsToggle.frame(maxWidth: .infinity, alignment: .trailing)
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 12)
+    }
+
+    @ViewBuilder private var statusChip: some View {
+        if let err = model.lastCaptureError {
+            Label(err, systemImage: "exclamationmark.triangle.fill")
+                .font(.caption2).foregroundStyle(.red).lineLimit(1)
+                .transition(.opacity.combined(with: .move(edge: .leading)))
+        } else {
+            Text(model.preferProRAW && model.isProRAWAvailable ? "ProRAW" : "RAW")
+                .font(.system(size: 10, weight: .bold, design: .monospaced))
+                .tracking(1.0)
+                .foregroundStyle(Color.white.opacity(0.55))
+        }
+    }
+
+    private var settingsToggle: some View {
+        Button {
+            showSettings.toggle()
+        } label: {
+            Image(systemName: showSettings ? "chevron.down" : "slider.horizontal.3")
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(Color.white.opacity(0.85))
+                .frame(width: 40, height: 40)
+                .background(Color.white.opacity(0.08), in: Circle())
+                .overlay(Circle().strokeBorder(Color.white.opacity(0.12), lineWidth: 0.5))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(showSettings ? "Hide settings" : "Show settings")
+    }
+
+    /// Settings drawer: one horizontal row of compact sections that sizes to its
+    /// content (no full-height fills), shown only when expanded.
+    private var settingsDrawer: some View {
+        VStack(spacing: 0) {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(alignment: .top, spacing: 24) {
+                    ExposureSection(model: model)
+                    WhiteBalanceSection(model: model)
+                    FocusSection(model: model)
+                    MonitoringSection(model: model)
+                    FormatSection(model: model)
+                }
+                .padding(.horizontal, 20)
+                .padding(.top, 14)
+                .padding(.bottom, 10)
+            }
+            Divider().overlay(Color.white.opacity(0.12))
         }
     }
 }
@@ -338,54 +374,4 @@ private struct MiniToggleStyle: ToggleStyle {
     }
 }
 
-// MARK: - Preview
-
-#if DEBUG
-    private final class StubCapturing: CameraCapturing {
-        var onVideoFrame: ((CVPixelBuffer) -> Void)?
-        var onConfigured: ((ExposureLimits, Bool) -> Void)?
-        var onCaptureFinished: ((String?) -> Void)?
-        var exposureLimits = ExposureLimits(
-            minISO: 25, maxISO: 6400,
-            minShutterSeconds: 1.0 / 8000, maxShutterSeconds: 30.0
-        )
-        var isProRAWAvailable: Bool = true
-        func startSession() {}
-        func stopSession() {}
-        func capturePhoto() {}
-        func focus(at point: CGPoint) {}
-        func setManualExposure(iso: Float, shutterSeconds: Double) {}
-        func setAutoExposure() {}
-        func setWhiteBalance(_ gains: WhiteBalanceGains) {}
-        func setAutoWhiteBalance() {}
-        func setFocus(lensPosition: Float) {}
-        func setAutoFocus() {}
-        func setPreferProRAW(_ prefer: Bool) {}
-    }
-
-    #Preview("auto") {
-        ZStack {
-            Color.black.ignoresSafeArea()
-            VStack {
-                Spacer()
-                ControlsPanel(model: CameraModel(service: StubCapturing())).padding()
-            }
-        }.preferredColorScheme(.dark)
-    }
-
-    #Preview("manual") {
-        let model = CameraModel(service: StubCapturing())
-        model.isManualExposure = true
-        model.isManualWhiteBalance = true
-        model.isManualFocus = true
-        model.zebraEnabled = true
-        model.focusPeakingEnabled = true
-        return ZStack {
-            Color.black.ignoresSafeArea()
-            VStack {
-                Spacer()
-                ControlsPanel(model: model).padding()
-            }
-        }.preferredColorScheme(.dark)
-    }
-#endif
+// Previews live in ControlsPanelPreviews.swift (keeps this file under the length cap).
