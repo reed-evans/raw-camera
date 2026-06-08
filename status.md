@@ -3,7 +3,7 @@
 _Source of truth (hand-maintained; `ecc` CLI not present). Updated between phases._
 
 **Phase-0 commit:** `0c3c324` (tag `phase-0`) — all worktrees branch from here.
-**Current phase:** Phase 2 (integration join) — all four Phase-1 branches merged to main.
+**Current phase:** ⛔ **Phase 4 — HARD STOP at the human device gate.** Tiers 0–2 green; integration merged. See DEVICE-CHECKLIST.md.
 
 ## Toolchain
 | Tool | Status |
@@ -35,9 +35,14 @@ _Source of truth (hand-maintained; `ecc` CLI not present). Updated between phase
 | wt/metal | phase1/metal | ✅ merged (`0e9ddca`) | T1-3 (7) + T1-7 | APPROVE (r1) |
 | wt/controls-ui | phase1/controls-ui | ✅ merged (`de704e2`) | none | APPROVE (r2) |
 | wt/monitoring-ui | phase1/monitoring-ui | ✅ merged (`559c8a5`) | T1-4 (15) | APPROVE (r2) |
-| wt/integration | phase2/integration | ▶️ active (join) | — | — |
+| wt/integration | phase2/integration | ✅ merged (`823540a`) | — | APPROVE |
 
-Integrated main: **80 CameraCore tests green**, Tier 0–2 all green.
+Integrated main: **80 CameraCore tests green**, Tier 0–2 all green. Phase-3 grader
+re-run on the merged branch: GREEN.
+
+## Security gate (pre-Phase-4)
+- Source scan: CLEAN — no networking/exfil, no secrets, privacy strings present+honest, no ATS bypass, no UserDefaults.
+- AgentShield: no CRITICAL/HIGH; 1 MEDIUM + 1 LOW are about the local `.claude/settings.local.json` config (deny list / PreToolUse hook), not the app. **PASS.**
 
 ## Deferred MEDIUMs for integration to resolve (from Phase-1 reviews)
 - **capture**: retain `PhotoCaptureProcessor` across the async Photos save (don't let it dealloc before `performChanges` completion, or `onCaptureFinished` is dropped).
