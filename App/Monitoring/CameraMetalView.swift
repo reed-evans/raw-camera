@@ -236,9 +236,14 @@ final class MetalRenderer: NSObject, MTKViewDelegate, @unchecked Sendable {
     }
 
     func draw(in view: MTKView) {
-        renderQueue.async { [weak self] in
-            self?.render(in: view)
-        }
+        // MTKView calls this on the main thread, and `currentDrawable` /
+        // `currentRenderPassDescriptor` are ONLY valid here on the main thread.
+        // Reading them from a background queue returns a render pass with no
+        // attachments ("No output textures defined for the render pass"), which
+        // faults the command buffer and cascades into GPU submission errors.
+        // Encode synchronously on main; GPU execution is still async, and frame
+        // uploads stay off-main in `enqueue`/`uploadFrame`.
+        render(in: view)
     }
 
     private func render(in view: MTKView) {
