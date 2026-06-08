@@ -25,7 +25,10 @@ targets:
         SWIFT_VERSION: "6.0"
         SWIFT_STRICT_CONCURRENCY: complete
         TARGETED_DEVICE_FAMILY: "1,2"
-        CODE_SIGNING_ALLOWED: NO
-        CODE_SIGNING_REQUIRED: NO
-        CODE_SIGN_IDENTITY: ""
+        # Automatic signing for the on-device run (Tier 3 gate). Set your team in
+        # Xcode > Signing & Capabilities, or set DEVELOPMENT_TEAM here.
+        CODE_SIGN_STYLE: Automatic
+        # NOTE: CI builds pass CODE_SIGNING_ALLOWED=NO on the xcodebuild command
+        # line (see scripts/gates.sh) — it is intentionally NOT baked in here, so
+        # Xcode can sign for a device.
         MTL_FAST_MATH: YES
