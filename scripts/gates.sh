@@ -19,6 +19,19 @@ tier0() {
   if xcodebuild -scheme RAWCamera -sdk iphoneos -destination 'generic/platform=iOS' \
        -derivedDataPath .build-xc CODE_SIGNING_ALLOWED=NO build >/tmp/t01.log 2>&1; then
     pass "T0-1 app compiles (iphoneos)"
+    # T0-1b: built bundle must be installable — a headless build can succeed yet
+    # produce a bundle the device installer rejects (missing CFBundleName /
+    # CFBundleExecutable when GENERATE_INFOPLIST_FILE=NO). Validate the product plist.
+    APP=.build-xc/Build/Products/Debug-iphoneos/RAWCamera.app
+    miss=""
+    for k in CFBundleName CFBundleExecutable CFBundleIdentifier CFBundlePackageType; do
+      [ -n "$(/usr/libexec/PlistBuddy -c "Print :$k" "$APP/Info.plist" 2>/dev/null)" ] || miss="$miss $k"
+    done
+    if [ -z "$miss" ] && [ -x "$APP/$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$APP/Info.plist" 2>/dev/null)" ]; then
+      pass "T0-1b built bundle is installable (required Info.plist keys + executable present)"
+    else
+      fail "T0-1b bundle INVALID — missing:${miss:- none}; check executable exists"
+    fi
   else
     fail "T0-1 app compile FAILED (see /tmp/t01.log)"; tail -5 /tmp/t01.log
   fi
