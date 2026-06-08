@@ -22,56 +22,7 @@ import simd
 // itself never writes `CameraModel`; it exposes a pure producer the integration
 // node pumps into the model on the main actor (CONTRACTS §6 writer ownership).
 
-// MARK: - Histogram producer (pure hand-off; main-actor delivery)
-
-/// A thin producer the integration node subscribes to. The Metal renderer reads
-/// back raw GPU bin counts on its private queue, normalizes them via
-/// `CameraCore.Histogram`, and delivers the result on the **main** actor so the
-/// integration node can assign it to `CameraModel.histogram` without re-hopping.
-public final class HistogramProducer: @unchecked Sendable {
-    /// Set by the integration node. Always invoked on the main thread.
-    public var onHistogram: ((HistogramData) -> Void)?
-
-    public init() {}
-
-    /// Called by the renderer on its private queue with raw integer counts.
-    /// Normalizes off-main, then delivers on main.
-    func ingest(red: [Int], green: [Int], blue: [Int], luma: [Int]) {
-        let data = Histogram.normalize(red: red, green: green, blue: blue, luma: luma)
-        DispatchQueue.main.async { [weak self] in
-            self?.onHistogram?(data)
-        }
-    }
-}
-
-/// Frame entry point the integration node pumps from `CameraCapturing.onVideoFrame`.
-/// The renderer registers its uploader here when the view is created, so the
-/// integration node only needs a reference to this sink — never to the
-/// coordinator (which SwiftUI does not surface). `submit` is safe to call from
-/// the capture stack's background queue.
-public final class FramePump: @unchecked Sendable {
-    private let lock = NSLock()
-    private var uploader: ((CVPixelBuffer) -> Void)?
-
-    public init() {}
-
-    /// Called by the renderer to register its (off-main) upload path.
-    func setUploader(_ uploader: @escaping (CVPixelBuffer) -> Void) {
-        lock.lock()
-        self.uploader = uploader
-        lock.unlock()
-    }
-
-    /// Integration pumps each camera frame here. Valid only for the call's
-    /// duration (the pool recycles the buffer); the uploader copies via the
-    /// texture cache immediately.
-    public func submit(_ pixelBuffer: CVPixelBuffer) {
-        lock.lock()
-        let uploader = self.uploader
-        lock.unlock()
-        uploader?(pixelBuffer)
-    }
-}
+// HistogramProducer and FramePump live in FramePump.swift.
 
 // MARK: - UIViewRepresentable
 
@@ -146,6 +97,10 @@ final class MetalRenderer: NSObject, MTKViewDelegate, @unchecked Sendable {
     // Latest camera texture + uniforms, guarded by `stateLock`.
     private let stateLock = NSLock()
     private var currentTexture: MTLTexture?
+    // The CVMetalTexture OWNS the IOSurface backing `currentTexture`. It must be
+    // retained for as long as the MTLTexture is used, or the backing is freed
+    // under the GPU and the command buffer faults. Kept paired with currentTexture.
+    private var currentCVTexture: CVMetalTexture?
     private var uniforms = PreviewUniforms()
     private var drawableSize = SIMD2<Float>(0, 0)
 
@@ -263,11 +218,12 @@ final class MetalRenderer: NSObject, MTKViewDelegate, @unchecked Sendable {
         else { return }
 
         stateLock.lock()
+        // Retain the CVMetalTexture alongside the MTLTexture — releasing it (or
+        // flushing the cache) while the GPU still reads the texture frees the
+        // backing IOSurface and faults the command buffer.
+        currentCVTexture = cvTexture
         currentTexture = texture
         stateLock.unlock()
-
-        // Recycle cache resources for stale frames.
-        CVMetalTextureCacheFlush(textureCache, 0)
     }
 
     // MARK: MTKViewDelegate
@@ -288,6 +244,8 @@ final class MetalRenderer: NSObject, MTKViewDelegate, @unchecked Sendable {
     private func render(in view: MTKView) {
         stateLock.lock()
         let texture = currentTexture
+        // Pair the backing with the texture and hold it for this command buffer.
+        let cvTexture = currentCVTexture
         var frameUniforms = uniforms
         frameUniforms.viewSize = drawableSize
         stateLock.unlock()
@@ -310,7 +268,10 @@ final class MetalRenderer: NSObject, MTKViewDelegate, @unchecked Sendable {
         )
 
         commandBuffer.present(drawable)
-        commandBuffer.addCompletedHandler { [weak self] _ in
+        // Capture `cvTexture` so the camera frame's IOSurface stays alive until the
+        // GPU finishes this command buffer (prevents a use-after-free fault).
+        commandBuffer.addCompletedHandler { [weak self, cvTexture] _ in
+            _ = cvTexture
             self?.readbackHistogram()
         }
         commandBuffer.commit()
