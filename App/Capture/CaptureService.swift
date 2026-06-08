@@ -198,6 +198,11 @@ extension CaptureService {
         guard addSessionIO(deviceInput: deviceInput, videoDataOutput: videoDataOutput, photoOutput: capturePhotoOutput) else {
             return
         }
+        // ProRAW pixel formats only appear in availableRawPhotoPixelFormatTypes
+        // once ProRAW is enabled — must be set inside the configuration block.
+        if capturePhotoOutput.isAppleProRAWSupported {
+            capturePhotoOutput.isAppleProRAWEnabled = true
+        }
         if let connection = videoDataOutput.connection(with: .video), connection.isVideoRotationAngleSupported(90) {
             connection.videoRotationAngle = 90  // T2-3: videoRotationAngle, not videoOrientation
         }
@@ -217,6 +222,12 @@ extension CaptureService {
 
     private func makeVideoDataOutput() -> AVCaptureVideoDataOutput {
         let output = AVCaptureVideoDataOutput()
+        // The Metal preview uploads each frame as a single BGRA texture, so the
+        // capture output must deliver BGRA (the default is biplanar YUV, which
+        // fails CVMetalTextureCacheCreateTextureFromImage and renders black).
+        output.videoSettings = [
+            kCVPixelBufferPixelFormatTypeKey as String: Int(kCVPixelFormatType_32BGRA)
+        ]
         output.setSampleBufferDelegate(self, queue: sessionQueue)
         output.alwaysDiscardsLateVideoFrames = true
         return output

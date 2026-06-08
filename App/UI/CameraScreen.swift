@@ -51,9 +51,13 @@ struct CameraScreen: View {
             }
         }
         .statusBarHidden(true)
-        .onAppear {
-            Permissions.requestCaptureAccess()
-            model.startSession()
+        .task {
+            // Start the session only after camera access is granted — otherwise
+            // it runs with no access and the preview stays black. `.task` runs on
+            // the main actor, so the @MainActor model call is safe here.
+            if await Permissions.ensureCaptureAccess() {
+                model.startSession()
+            }
         }
         .onDisappear { model.stopSession() }
     }

@@ -12,25 +12,24 @@ import os.log
 enum Permissions {
     private static let logger = Logger(subsystem: "com.rawcamera", category: "Permissions")
 
-    /// Request camera + Photos (add-only) authorization. Safe to call repeatedly;
-    /// the system returns the cached decision after the first prompt.
-    static func requestCaptureAccess() {
-        requestCamera()
+    /// Ensure camera access, prompting if needed, and request Photos add-only
+    /// access. Returns whether the camera is authorized — the caller must wait
+    /// for `true` before starting the session, or the session runs with no
+    /// access and the preview stays black. Safe to call repeatedly.
+    static func ensureCaptureAccess() async -> Bool {
         requestPhotosAddOnly()
-    }
-
-    private static func requestCamera() {
         switch AVCaptureDevice.authorizationStatus(for: .video) {
+        case .authorized:
+            return true
         case .notDetermined:
-            AVCaptureDevice.requestAccess(for: .video) { granted in
-                if !granted { logger.error("Camera access denied by user.") }
-            }
+            let granted = await AVCaptureDevice.requestAccess(for: .video)
+            if !granted { logger.error("Camera access denied by user.") }
+            return granted
         case .denied, .restricted:
             logger.error("Camera access unavailable (denied/restricted).")
-        case .authorized:
-            break
+            return false
         @unknown default:
-            break
+            return false
         }
     }
 
