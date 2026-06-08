@@ -113,11 +113,22 @@ constant uint kHistogramBins = 256u;
 
 kernel void histogram_accumulate(texture2d<float> frame [[texture(0)]],
                                  device atomic_uint *bins [[buffer(0)]],
-                                 uint2 gid [[thread_position_in_grid]]) {
-    if (gid.x >= frame.get_width() || gid.y >= frame.get_height()) {
+                                 uint2 gid [[thread_position_in_grid]],
+                                 uint2 gridSize [[threads_per_grid]]) {
+    if (gid.x >= gridSize.x || gid.y >= gridSize.y) {
         return;
     }
-    float4 c = frame.read(gid);
+    // Map the bounded sampling grid onto the full-resolution frame, so histogram
+    // cost is fixed regardless of capture resolution (see encodeHistogram). At
+    // most a few hundred-thousand reads/atomics per frame instead of ~12M.
+    uint tw = frame.get_width();
+    uint th = frame.get_height();
+    if (tw == 0u || th == 0u) {
+        return;
+    }
+    uint sx = min(tw - 1u, uint((float(gid.x) + 0.5) / float(gridSize.x) * float(tw)));
+    uint sy = min(th - 1u, uint((float(gid.y) + 0.5) / float(gridSize.y) * float(th)));
+    float4 c = frame.read(uint2(sx, sy));
 
     uint r = uint(clamp(c.r, 0.0, 1.0) * 255.0 + 0.5);
     uint g = uint(clamp(c.g, 0.0, 1.0) * 255.0 + 0.5);

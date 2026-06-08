@@ -105,7 +105,7 @@ struct CameraMetalView: UIViewRepresentable {
         view.delegate = context.coordinator
         view.isPaused = false
         view.enableSetNeedsDisplay = false
-        view.preferredFramesPerSecond = 60
+        view.preferredFramesPerSecond = 30
         return view
     }
 
@@ -356,7 +356,19 @@ final class MetalRenderer: NSObject, MTKViewDelegate, @unchecked Sendable {
         let w = histogramPipeline.threadExecutionWidth
         let h = max(1, histogramPipeline.maxTotalThreadsPerThreadgroup / w)
         let threadsPerGroup = MTLSize(width: w, height: h, depth: 1)
-        let grid = MTLSize(width: texture.width, height: texture.height, depth: 1)
+        // Sample a BOUNDED grid, not one thread per pixel. With the .photo preset
+        // the camera texture is ~12 MP; dispatching it 1:1 launches millions of
+        // threads all doing atomic adds into 1024 bins — atomic contention that
+        // saturates the GPU, trips the watchdog, and locks up the device. A capped
+        // grid is statistically more than enough for a preview histogram and keeps
+        // cost independent of capture resolution. The kernel maps gid → texel via
+        // [[threads_per_grid]].
+        let maxSamples = 384
+        let grid = MTLSize(
+            width: min(texture.width, maxSamples),
+            height: min(texture.height, maxSamples),
+            depth: 1
+        )
         compute.dispatchThreads(grid, threadsPerThreadgroup: threadsPerGroup)
         compute.endEncoding()
     }
