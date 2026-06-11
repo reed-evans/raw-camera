@@ -152,6 +152,24 @@ public final class CameraModel {
                 self.is10BitHDRAvailable = caps.supports10BitHDR
             }
         }
+        // Live device values for read-only readouts. Only adopt them for axes
+        // currently in auto — manual axes keep the user's chosen values.
+        service.onDeviceValues = { [weak self] values in
+            Task { @MainActor in
+                guard let self else { return }
+                if !self.isManualExposure {
+                    self.iso = values.iso
+                    self.shutterSeconds = values.shutterSeconds
+                }
+                if !self.isManualWhiteBalance {
+                    self.whiteBalanceTemperature = values.whiteBalanceTemperature
+                    self.whiteBalanceTint = values.whiteBalanceTint
+                }
+                if !self.isManualFocus {
+                    self.focusLensPosition = values.lensPosition
+                }
+            }
+        }
     }
 
     // MARK: Intents (frozen signatures; integration completes the bodies)

@@ -14,6 +14,7 @@
         var onCaptureFinished: ((String?) -> Void)?
         var onZoomRange: ((CGFloat, CGFloat) -> Void)?
         var onCaptureCapabilities: ((CaptureCapabilities) -> Void)?
+        var onDeviceValues: ((DeviceValues) -> Void)?
         var exposureLimits = ExposureLimits(
             minISO: 25, maxISO: 6400, minShutterSeconds: 1.0 / 8000, maxShutterSeconds: 30)
         var isProRAWAvailable = true

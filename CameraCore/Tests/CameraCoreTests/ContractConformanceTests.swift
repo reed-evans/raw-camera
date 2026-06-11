@@ -15,6 +15,7 @@ final class MockCaptureService: CameraCapturing {
     var onCaptureFinished: ((String?) -> Void)?
     var onZoomRange: ((CGFloat, CGFloat) -> Void)?
     var onCaptureCapabilities: ((CaptureCapabilities) -> Void)?
+    var onDeviceValues: ((DeviceValues) -> Void)?
     private(set) var exposureLimits: ExposureLimits = .unset
     private(set) var isProRAWAvailable: Bool = false
 

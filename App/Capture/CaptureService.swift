@@ -20,6 +20,7 @@ final class CaptureService: NSObject, CameraCapturing {
     var onCaptureFinished: ((String?) -> Void)?
     var onZoomRange: ((CGFloat, CGFloat) -> Void)?
     var onCaptureCapabilities: ((CaptureCapabilities) -> Void)?
+    var onDeviceValues: ((DeviceValues) -> Void)?
 
     /// Usable preview zoom is capped well below the device's huge digital max.
     private static let maxUsableZoom: CGFloat = 10.0
@@ -46,6 +47,16 @@ final class CaptureService: NSObject, CameraCapturing {
     /// Mutated only on `sessionQueue`.
     private var activeProcessors: Set<PhotoCaptureProcessor> = []
 
+    // Live device-value observation state. Driven from
+    // CaptureService+DeviceValues.swift (hence internal, not private).
+    /// KVO observations of the device's live exposure/WB/focus values. Retained
+    /// for the session; auto-invalidate when the array is released.
+    var deviceValueObservations: [NSKeyValueObservation] = []
+    /// Throttle gate for `onDeviceValues` — KVO fires far faster than the UI
+    /// needs. Guarded by `deviceValueLock` since KVO callbacks arrive off-queue.
+    let deviceValueLock = NSLock()
+    var lastDeviceValueEmit: TimeInterval = 0
+
     // MARK: Init
 
     override init() {
@@ -55,6 +66,7 @@ final class CaptureService: NSObject, CameraCapturing {
 
     deinit {
         NotificationCenter.default.removeObserver(self)
+        deviceValueObservations.forEach { $0.invalidate() }
     }
 
     // MARK: Session lifecycle
@@ -352,10 +364,13 @@ extension CaptureService {
         // launch, before the device existed).
         if captureOptions.hdr10BitColor { applyColorSpace() }
 
+        observeDeviceValues(device)
+
         onConfigured?(limits, isProRAWAvailable)
         let maxZoom = min(device.maxAvailableVideoZoomFactor, CaptureService.maxUsableZoom)
         onZoomRange?(device.minAvailableVideoZoomFactor, maxZoom)
         onCaptureCapabilities?(capabilities(device: device, photoOutput: photoOutput))
+        emitDeviceValues(from: device)  // seed an initial readout before any change
     }
 
     fileprivate func updateSelectedRAWFormat() {

@@ -27,6 +27,33 @@ public struct ExposureLimits: Equatable, Sendable {
     )
 }
 
+/// **FROZEN — orchestrator-mediated only.** The device's current *effective*
+/// exposure / white-balance / focus values, sampled from the live capture
+/// device. Lets the UI show read-only readouts while in auto mode (where the
+/// device, not the user, is choosing these). Shutter is in seconds; temperature
+/// in Kelvin; tint in Apple's device units; lens position in `0...1`.
+public struct DeviceValues: Equatable, Sendable {
+    public var iso: Float
+    public var shutterSeconds: Double
+    public var whiteBalanceTemperature: Float
+    public var whiteBalanceTint: Float
+    public var lensPosition: Float
+
+    public init(
+        iso: Float,
+        shutterSeconds: Double,
+        whiteBalanceTemperature: Float,
+        whiteBalanceTint: Float,
+        lensPosition: Float
+    ) {
+        self.iso = iso
+        self.shutterSeconds = shutterSeconds
+        self.whiteBalanceTemperature = whiteBalanceTemperature
+        self.whiteBalanceTint = whiteBalanceTint
+        self.lensPosition = lensPosition
+    }
+}
+
 /// **FROZEN — orchestrator-mediated only.** Per-channel white-balance gains.
 /// Each channel is in `1.0...maxGain` (device-reported). Green is typically
 /// pinned to `1.0` and red/blue scale around it.

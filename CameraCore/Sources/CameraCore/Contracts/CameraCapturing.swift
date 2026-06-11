@@ -36,6 +36,12 @@ public protocol CameraCapturing: AnyObject {
     /// features (48MP, RAW bracketing, 10-bit HDR) the device supports.
     var onCaptureCapabilities: ((CaptureCapabilities) -> Void)? { get set }
 
+    /// Fires (throttled) while a device is configured: the device's current
+    /// effective exposure / white-balance / focus values, so the UI can show
+    /// live read-only readouts in auto mode. Background queue; consumers hop to
+    /// the main actor before updating observable state.
+    var onDeviceValues: ((DeviceValues) -> Void)? { get set }
+
     /// Active-format exposure range; `.unset` until a device is configured.
     var exposureLimits: ExposureLimits { get }
 
