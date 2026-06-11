@@ -107,24 +107,25 @@ struct LevelTests {
         #expect(Level.isLevel(rollDegrees: -2.0, pitchDegrees: 2.0, threshold: 2.0))
     }
 
-    @Test("exactly at threshold boundary → true (inclusive)")
+    @Test("roll exactly at threshold boundary → true (inclusive)")
     func atThresholdBoundary() {
         #expect(Level.isLevel(rollDegrees: 2.0, pitchDegrees: 0.0, threshold: 2.0))
-        #expect(Level.isLevel(rollDegrees: 0.0, pitchDegrees: 2.0, threshold: 2.0))
+        #expect(Level.isLevel(rollDegrees: -2.0, pitchDegrees: 0.0, threshold: 2.0))
     }
 
-    @Test("just over threshold → false")
+    @Test("roll just over threshold → false")
     func justOverThreshold() {
         #expect(!Level.isLevel(rollDegrees: 2.001, pitchDegrees: 0.0, threshold: 2.0))
-        #expect(!Level.isLevel(rollDegrees: 0.0, pitchDegrees: -2.001, threshold: 2.0))
+        #expect(!Level.isLevel(rollDegrees: -2.001, pitchDegrees: 0.0, threshold: 2.0))
     }
 
-    @Test("roll within threshold but pitch outside → false")
-    func pitchOutsideThreshold() {
-        #expect(!Level.isLevel(rollDegrees: 1.0, pitchDegrees: 5.0, threshold: 2.0))
+    @Test("pitch is ignored: level roll with large pitch → true (roll-only)")
+    func pitchIsIgnored() {
+        #expect(Level.isLevel(rollDegrees: 1.0, pitchDegrees: 5.0, threshold: 2.0))
+        #expect(Level.isLevel(rollDegrees: 0.0, pitchDegrees: -45.0, threshold: 2.0))
     }
 
-    @Test("roll outside threshold but pitch within → false")
+    @Test("roll outside threshold → false regardless of pitch")
     func rollOutsideThreshold() {
         #expect(!Level.isLevel(rollDegrees: -5.0, pitchDegrees: 1.0, threshold: 2.0))
     }

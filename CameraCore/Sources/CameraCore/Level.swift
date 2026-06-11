@@ -40,18 +40,19 @@ public enum Level {
         )
     }
 
-    /// Whether both roll and pitch are within `threshold` degrees of level.
+    /// Whether roll is within `threshold` degrees of level (roll-only horizon).
     /// Level is defined as the closed interval [−threshold, +threshold].
     /// - Parameters:
     ///   - rollDegrees: current roll in degrees.
-    ///   - pitchDegrees: current pitch in degrees.
+    ///   - pitchDegrees: current pitch in degrees. Accepted for API symmetry but
+    ///     not part of the level criterion — the horizon indicator is roll-only.
     ///   - threshold: maximum allowed deviation in degrees (inclusive).
-    /// - Returns: `true` iff |roll| ≤ threshold AND |pitch| ≤ threshold.
+    /// - Returns: `true` iff |roll| ≤ threshold.
     public static func isLevel(
         rollDegrees: Double,
         pitchDegrees: Double,
         threshold: Double
     ) -> Bool {
-        abs(rollDegrees) <= threshold && abs(pitchDegrees) <= threshold
+        abs(rollDegrees) <= threshold
     }
 }

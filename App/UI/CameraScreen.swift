@@ -34,17 +34,16 @@ struct CameraScreen: View {
         GeometryReader { geo in
             ZStack {
                 preview(size: geo.size)
+                if model.levelGuideEnabled {
+                    LevelGuideView(
+                        rollDegrees: model.rollDegrees,
+                        isLevel: model.isLevel
+                    )
+                    .facingUser(deviceAngle)
+                }
 
                 // Level (top) + portrait histogram + dock.
                 VStack(spacing: 10) {
-                    if model.levelGuideEnabled {
-                        LevelGuideView(
-                            rollDegrees: model.rollDegrees,
-                            pitchDegrees: model.pitchDegrees,
-                            isLevel: model.isLevel
-                        )
-                        .facingUser(deviceAngle)
-                    }
                     Spacer()
                     if model.histogramEnabled && !isLandscape {
                         HistogramView(histogram: model.histogram)
@@ -124,13 +123,13 @@ struct CameraScreen: View {
 
     /// The zoom slider hugs the menu in landscape — a smaller inset than the full
     /// menu reserve so it sits right next to the panel rather than mid-screen.
-    private var landscapeZoomInset: CGFloat { model.showSettings ? 200 : 76 }
+    private var landscapeZoomInset: CGFloat { model.showSettings ? 175 : 15 }
 
     /// Histogram rotated to run along the physical bottom edge: a strip pinned to
     /// the portrait leading/trailing edge, spanning from the top down to just
     /// before the menu (so it never clips off-screen or covers the settings).
     private func landscapeHistogram(size: CGSize) -> some View {
-        let topMargin: CGFloat = 16
+        let topMargin: CGFloat = 20
         // Extra clearance over the menu reserve so the strip's far end is lifted
         // clear of the screen edge instead of clipping off the bottom.
         let bottomInset = menuReserve + 40
