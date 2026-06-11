@@ -1,5 +1,6 @@
 import CameraCore
 import SwiftUI
+import UIKit
 
 // OWNER: wt/integration. Phase-0 stub composing the preview, controls, and
 // monitoring overlays over the shared `CameraModel`.
@@ -7,9 +8,18 @@ struct CameraScreen: View {
     @State private var model: CameraModel
     @State private var pinching = false
     @State private var zoomAtPinchStart: CGFloat = 1.0
+    /// Physical-orientation counter-rotation for the overlay controls (the
+    /// interface is locked to portrait; the preview is never rotated).
+    @State private var deviceAngle: Angle = .zero
 
     init(model: CameraModel) {
         _model = State(initialValue: model)
+    }
+
+    private func refreshOrientation() {
+        if let angle = DeviceOrientationAngle.angle(for: UIDevice.current.orientation) {
+            deviceAngle = angle
+        }
     }
 
     var body: some View {
@@ -51,7 +61,9 @@ struct CameraScreen: View {
             if model.showZoomSlider {
                 HStack {
                     Spacer()
-                    ZoomSlider(model: model).padding(.trailing, 10)
+                    ZoomSlider(model: model)
+                        .facingUser(deviceAngle)
+                        .padding(.trailing, 10)
                 }
             }
 
@@ -62,6 +74,7 @@ struct CameraScreen: View {
                         pitchDegrees: model.pitchDegrees,
                         isLevel: model.isLevel
                     )
+                    .facingUser(deviceAngle)
                 }
                 Spacer()
                 if model.histogramEnabled {
@@ -69,12 +82,19 @@ struct CameraScreen: View {
                         .padding(.leading, 12)
                         .padding(.trailing, histogramTrailingPadding)
                 }
-                ControlsPanel(model: model)
+                ControlsPanel(model: model, angle: deviceAngle)
                     .padding(.horizontal, 12)
                     .padding(.bottom, 6)
             }
         }
         .statusBarHidden(true)
+        .onAppear {
+            UIDevice.current.beginGeneratingDeviceOrientationNotifications()
+            refreshOrientation()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIDevice.orientationDidChangeNotification)) { _ in
+            refreshOrientation()
+        }
         .task {
             // Start the session only after camera access is granted — otherwise
             // it runs with no access and the preview stays black. `.task` runs on
@@ -83,7 +103,10 @@ struct CameraScreen: View {
                 model.startSession()
             }
         }
-        .onDisappear { model.stopSession() }
+        .onDisappear {
+            model.stopSession()
+            UIDevice.current.endGeneratingDeviceOrientationNotifications()
+        }
     }
 
     /// Trailing margin for the histogram. When the zoom slider is shown AND the

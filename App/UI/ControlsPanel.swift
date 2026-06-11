@@ -10,6 +10,8 @@ import SwiftUI
 /// settings slide up on demand and tuck away again, keeping the preview clear.
 struct ControlsPanel: View {
     @Bindable var model: CameraModel
+    /// Physical-orientation rotation applied to the controls (0° in portrait).
+    var angle: Angle = .zero
 
     var body: some View {
         VStack(spacing: 0) {
@@ -32,9 +34,9 @@ struct ControlsPanel: View {
     /// Slim, always-docked bar: status (left) · shutter (center) · settings toggle (right).
     private var commandBar: some View {
         HStack(spacing: 14) {
-            statusChip.frame(maxWidth: .infinity, alignment: .leading)
+            statusChip.facingUser(angle).frame(maxWidth: .infinity, alignment: .leading)
             ShutterButton(isRunning: model.isSessionRunning, action: model.capturePhoto)
-            settingsToggle.frame(maxWidth: .infinity, alignment: .trailing)
+            settingsToggle.facingUser(angle).frame(maxWidth: .infinity, alignment: .trailing)
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 12)
@@ -74,13 +76,16 @@ struct ControlsPanel: View {
         VStack(spacing: 0) {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(alignment: .top, spacing: 24) {
-                    ExposureSection(model: model)
-                    WhiteBalanceSection(model: model)
-                    FocusSection(model: model)
-                    AspectSection(model: model)
-                    MonitoringSection(model: model)
-                    FormatSection(model: model)
-                    CaptureSection(model: model)
+                    Group {
+                        ExposureSection(model: model)
+                        WhiteBalanceSection(model: model)
+                        FocusSection(model: model)
+                        AspectSection(model: model)
+                        MonitoringSection(model: model)
+                        FormatSection(model: model)
+                        CaptureSection(model: model)
+                    }
+                    .facingUser(angle)
                 }
                 .padding(.horizontal, 20)
                 .padding(.top, 14)
