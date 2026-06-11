@@ -13,6 +13,8 @@ struct ControlsPanel: View {
     /// Physical-orientation rotation applied to the controls (0° in portrait).
     var angle: Angle = .zero
 
+    private var isLandscape: Bool { abs(angle.degrees) == 90 }
+
     var body: some View {
         VStack(spacing: 0) {
             if model.showSettings {
@@ -75,7 +77,9 @@ struct ControlsPanel: View {
     private var settingsDrawer: some View {
         VStack(spacing: 0) {
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(alignment: .center, spacing: 24) {
+                // Top-align sections in portrait so labels line up; center them
+                // when rotated so they read evenly in landscape.
+                HStack(alignment: isLandscape ? .center : .top, spacing: 24) {
                     Group {
                         ExposureSection(model: model)
                         WhiteBalanceSection(model: model)
