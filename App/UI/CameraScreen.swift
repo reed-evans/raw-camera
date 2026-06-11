@@ -122,12 +122,19 @@ struct CameraScreen: View {
     /// which is taller when the settings drawer is open.
     private var menuReserve: CGFloat { model.showSettings ? 300 : 110 }
 
+    /// The zoom slider hugs the menu in landscape — a smaller inset than the full
+    /// menu reserve so it sits right next to the panel rather than mid-screen.
+    private var landscapeZoomInset: CGFloat { model.showSettings ? 200 : 76 }
+
     /// Histogram rotated to run along the physical bottom edge: a strip pinned to
     /// the portrait leading/trailing edge, spanning from the top down to just
     /// before the menu (so it never clips off-screen or covers the settings).
     private func landscapeHistogram(size: CGSize) -> some View {
         let topMargin: CGFloat = 16
-        let span = max(140, size.height - menuReserve - topMargin)
+        // Extra clearance over the menu reserve so the strip's far end is lifted
+        // clear of the screen edge instead of clipping off the bottom.
+        let bottomInset = menuReserve + 40
+        let span = max(140, size.height - bottomInset - topMargin)
         return HStack(spacing: 0) {
             if !physicalBottomLeading { Spacer() }
             VStack(spacing: 0) {
@@ -141,18 +148,19 @@ struct CameraScreen: View {
         }
         .padding(physicalBottomLeading ? .leading : .trailing, 8)
         .padding(.top, topMargin)
-        .padding(.bottom, menuReserve)
+        .padding(.bottom, bottomInset)
     }
 
     @ViewBuilder private var zoomOverlay: some View {
         if isLandscape {
-            // Physically: vertically centered, just left of the menu. In portrait
-            // coords that is horizontally centered, just above the menu.
+            // Physically: sitting right next to the menu (just left of it). In
+            // portrait coords that is horizontally centered, just above the menu —
+            // a smaller inset than the histogram so it tucks up against the panel.
             VStack(spacing: 0) {
                 Spacer()
                 ZoomSlider(model: model).facingUser(deviceAngle)
             }
-            .padding(.bottom, menuReserve)
+            .padding(.bottom, landscapeZoomInset)
         } else {
             // Portrait: bottom-right, sitting just above the menu (above the open
             // drawer, or above the command bar when closed).

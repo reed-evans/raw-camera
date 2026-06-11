@@ -85,7 +85,7 @@ struct ControlsPanel: View {
                         WhiteBalanceSection(model: model)
                         FocusSection(model: model)
                         AspectSection(model: model)
-                        MonitoringSection(model: model)
+                        MonitoringSection(model: model, isLandscape: isLandscape)
                         FormatSection(model: model)
                         CaptureSection(model: model)
                     }
@@ -145,7 +145,7 @@ private struct ExposureSection: View {
                 onEnable: { model.setManualExposure(iso: model.iso, shutterSeconds: model.shutterSeconds) }
             )
             if model.isManualExposure {
-                VStack(spacing: 8) {
+                VStack(spacing: 6) {
                     FSlider(
                         label: "ISO", range: isoRange,
                         value: Binding(
@@ -177,7 +177,7 @@ private struct WhiteBalanceSection: View {
                 onEnable: { model.setWhiteBalance(temperature: model.whiteBalanceTemperature, tint: model.whiteBalanceTint) }
             )
             if model.isManualWhiteBalance {
-                VStack(spacing: 8) {
+                VStack(spacing: 6) {
                     FSlider(
                         label: "K", range: CameraModel.temperatureRange,
                         value: Binding(
@@ -222,21 +222,22 @@ private struct FocusSection: View {
 
 private struct MonitoringSection: View {
     @Bindable var model: CameraModel
+    var isLandscape = false
 
     var body: some View {
         CamSection(label: "MONITOR") {
-            VStack(spacing: 8) {
-                MonRow(label: "ZEBRA", isOn: $model.zebraEnabled)
-                if model.zebraEnabled {
-                    ThreshRow(value: $model.zebraThreshold).transition(.opacity.combined(with: .offset(y: 4)))
-                }
-                MonRow(label: "PEAK", isOn: $model.focusPeakingEnabled)
-                if model.focusPeakingEnabled {
-                    ThreshRow(value: $model.focusPeakingThreshold).transition(.opacity.combined(with: .offset(y: 4)))
-                }
+            VStack(alignment: .leading, spacing: 8) {
                 MonRow(label: "HIST", isOn: $model.histogramEnabled)
                 MonRow(label: "LEVEL", isOn: $model.levelGuideEnabled)
                 MonRow(label: "ZOOM", isOn: $model.showZoomSlider)
+                // ZEBRA/PEAK sit at the bottom; their threshold slider reveals
+                // beside the switch in portrait, stacked beneath it in landscape.
+                ThreshToggleRow(
+                    label: "ZEBRA", isOn: $model.zebraEnabled, threshold: $model.zebraThreshold,
+                    stacked: isLandscape)
+                ThreshToggleRow(
+                    label: "PEAK", isOn: $model.focusPeakingEnabled, threshold: $model.focusPeakingThreshold,
+                    stacked: isLandscape)
             }
             .animation(.easeInOut(duration: 0.18), value: model.zebraEnabled)
             .animation(.easeInOut(duration: 0.18), value: model.focusPeakingEnabled)
@@ -382,7 +383,7 @@ private struct FSlider: View {
                 Spacer()
                 Text(display).font(.system(size: 10, weight: .semibold, design: .monospaced)).foregroundStyle(Color.white.opacity(0.85))
             }
-            Slider(value: $value, in: range).tint(.white).frame(width: 120)
+            Slider(value: $value, in: range).tint(.white).compactSlider(width: 120)
         }
     }
 }
@@ -397,8 +398,23 @@ private struct DSlider: View {
                 Spacer()
                 Text(display).font(.system(size: 10, weight: .semibold, design: .monospaced)).foregroundStyle(Color.white.opacity(0.85))
             }
-            Slider(value: $value, in: range).tint(.white).frame(width: 120)
+            Slider(value: $value, in: range).tint(.white).compactSlider(width: 120)
         }
+    }
+}
+
+private extension View {
+    /// Scales a Slider down so it reads at `height` points tall — matching the
+    /// monitor switches (18pt) by default — while staying `width` points wide.
+    /// Keeps the drawer compact and the controls visually consistent.
+    func compactSlider(width: CGFloat, height: CGFloat = 18) -> some View {
+        let natural: CGFloat = 28  // approx intrinsic height of an iOS Slider
+        let scale = height / natural
+        return
+            self
+            .frame(width: width / scale)
+            .scaleEffect(scale)
+            .frame(width: width, height: height)
     }
 }
 
@@ -415,17 +431,51 @@ private struct MonRow: View {
     }
 }
 
-private struct ThreshRow: View {
-    @Binding var value: Float
+/// A monitor toggle whose threshold slider reveals next to the switch
+/// (ZEBRA/PEAK). Beside it in portrait; stacked beneath it in landscape so the
+/// rotated row of switches keeps a tidy line with the sliders under them.
+private struct ThreshToggleRow: View {
+    let label: String
+    @Binding var isOn: Bool
+    @Binding var threshold: Float
+    var stacked = false
 
     var body: some View {
-        HStack(spacing: 6) {
-            Text("THR").font(.system(size: 9, weight: .medium, design: .monospaced))
-                .foregroundStyle(Color.white.opacity(0.35)).frame(width: 24, alignment: .leading)
-            Slider(value: $value, in: 0...1).tint(Color.white.opacity(0.7)).frame(width: 80)
-            Text(String(format: "%.0f%%", value * 100))
+        Group {
+            if stacked {
+                VStack(alignment: .leading, spacing: 6) {
+                    switchRow
+                    if isOn { sliderReadout }
+                }
+            } else {
+                HStack(spacing: 8) {
+                    switchRow
+                    if isOn { sliderReadout }
+                }
+            }
+        }
+        .transition(.opacity)
+    }
+
+    private var switchRow: some View {
+        HStack(spacing: 8) {
+            Text(label).font(.system(size: 9, weight: .semibold, design: .monospaced)).tracking(0.8)
+                .foregroundStyle(isOn ? Color.white.opacity(0.9) : Color.white.opacity(0.4))
+                .frame(width: 36, alignment: .leading).animation(.easeOut(duration: 0.12), value: isOn)
+            Toggle("", isOn: $isOn).labelsHidden().toggleStyle(MiniToggleStyle())
+        }
+    }
+
+    private var sliderReadout: some View {
+        // In landscape the readout sits under the switch, so keep its width within
+        // the section's 90pt column (slider + spacing + "100%") — otherwise the
+        // column grows and widens the whole panel for no visual gain.
+        HStack(spacing: 8) {
+            Slider(value: $threshold, in: 0...1).tint(Color.white.opacity(0.7))
+                .compactSlider(width: stacked ? 50 : 64)
+            Text(String(format: "%.0f%%", threshold * 100))
                 .font(.system(size: 9, weight: .semibold, design: .monospaced))
-                .foregroundStyle(Color.white.opacity(0.65)).frame(width: 28, alignment: .trailing)
+                .foregroundStyle(Color.white.opacity(0.65)).frame(width: 28, alignment: .leading)
         }
     }
 }
