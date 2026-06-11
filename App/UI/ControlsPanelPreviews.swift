@@ -4,45 +4,19 @@ import SwiftUI
 // OWNER: wt/controls-ui. Xcode previews for ControlsPanel (DEBUG only).
 
 #if DEBUG
-    private final class StubCapturing: CameraCapturing {
-        var onVideoFrame: ((CVPixelBuffer) -> Void)?
-        var onConfigured: ((ExposureLimits, Bool) -> Void)?
-        var onCaptureFinished: ((String?) -> Void)?
-        var onZoomRange: ((CGFloat, CGFloat) -> Void)?
-        var onCaptureCapabilities: ((CaptureCapabilities) -> Void)?
-        var exposureLimits = ExposureLimits(
-            minISO: 25, maxISO: 6400,
-            minShutterSeconds: 1.0 / 8000, maxShutterSeconds: 30.0
-        )
-        var isProRAWAvailable: Bool = true
-        func startSession() {}
-        func stopSession() {}
-        func capturePhoto() {}
-        func focus(at point: CGPoint) {}
-        func setManualExposure(iso: Float, shutterSeconds: Double) {}
-        func setAutoExposure() {}
-        func setWhiteBalance(_ gains: WhiteBalanceGains) {}
-        func setAutoWhiteBalance() {}
-        func setFocus(lensPosition: Float) {}
-        func setAutoFocus() {}
-        func setPreferProRAW(_ prefer: Bool) {}
-        func setZoom(factor: CGFloat) {}
-        func setCaptureOptions(_ options: CaptureOptions) {}
-    }
-
     #Preview("collapsed") {
         ZStack {
             Color.black.ignoresSafeArea()
             VStack {
                 Spacer()
-                ControlsPanel(model: CameraModel(service: StubCapturing()))
+                ControlsPanel(model: .preview())
                     .padding(.horizontal, 12)
             }
         }.preferredColorScheme(.dark)
     }
 
     #Preview("manual") {
-        let model = CameraModel(service: StubCapturing())
+        let model = CameraModel.preview()
         model.isManualExposure = true
         model.isManualWhiteBalance = true
         model.isManualFocus = true

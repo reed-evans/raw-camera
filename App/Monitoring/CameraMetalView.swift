@@ -377,3 +377,12 @@ final class MetalRenderer: NSObject, MTKViewDelegate, @unchecked Sendable {
         histogramProducer.ingest(red: red, green: green, blue: blue, luma: luma)
     }
 }
+
+#if DEBUG
+    // Renders black in the canvas (no camera frames); included so every view has a
+    // preview. The real preview only appears on a device.
+    #Preview {
+        CameraMetalView(model: .preview())
+            .ignoresSafeArea()
+    }
+#endif

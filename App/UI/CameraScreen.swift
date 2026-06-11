@@ -175,3 +175,11 @@ struct CameraScreen: View {
         model.showZoomSlider ? 70 : 12
     }
 }
+
+#if DEBUG
+    // The Metal preview renders black in the canvas (no camera), but the overlays
+    // (controls, histogram, level guide) compose over it.
+    #Preview {
+        CameraScreen(model: .preview())
+    }
+#endif

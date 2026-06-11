@@ -29,3 +29,13 @@ struct ZoomSlider: View {
         .overlay(Capsule().strokeBorder(Color.white.opacity(0.1), lineWidth: 0.5))
     }
 }
+
+#if DEBUG
+    #Preview {
+        ZoomSlider(model: .preview())
+            .padding()
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(Color.black)
+            .preferredColorScheme(.dark)
+    }
+#endif

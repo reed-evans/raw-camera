@@ -124,3 +124,12 @@ struct HistogramView: View {
         )
     }
 }
+
+#if DEBUG
+    #Preview {
+        HistogramView(histogram: .previewSample)
+            .padding()
+            .background(Color.black)
+            .preferredColorScheme(.dark)
+    }
+#endif

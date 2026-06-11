@@ -111,3 +111,15 @@ struct LevelGuideView: View {
         return max(-limit, min(limit, raw))
     }
 }
+
+#if DEBUG
+    #Preview {
+        HStack(spacing: 40) {
+            LevelGuideView(rollDegrees: 0, pitchDegrees: 0, isLevel: true)
+            LevelGuideView(rollDegrees: 12, pitchDegrees: -6, isLevel: false)
+        }
+        .padding()
+        .background(Color.black)
+        .preferredColorScheme(.dark)
+    }
+#endif
