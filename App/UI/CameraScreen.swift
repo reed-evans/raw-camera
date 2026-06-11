@@ -23,8 +23,6 @@ struct CameraScreen: View {
     /// For landscapeLeft (+90°) the physical bottom maps to the portrait leading
     /// edge; for landscapeRight (−90°) it maps to the trailing edge.
     private var physicalBottomLeading: Bool { deviceAngle.degrees == 90 }
-    /// Portrait height reserved for the dock so overlays clear the menu.
-    private let dockReserve: CGFloat = 116
 
     private func refreshOrientation() {
         if let angle = DeviceOrientationAngle.angle(for: UIDevice.current.orientation) {
@@ -120,33 +118,41 @@ struct CameraScreen: View {
         )
     }
 
-    /// Histogram rotated to run along the physical bottom edge, ending before the
-    /// dock. Its pre-rotation width becomes the physical-horizontal length.
+    /// Reserve at the physical-right (portrait bottom) so overlays clear the menu,
+    /// which is taller when the settings drawer is open.
+    private var menuReserve: CGFloat { model.showSettings ? 300 : 110 }
+
+    /// Histogram rotated to run along the physical bottom edge: a strip pinned to
+    /// the portrait leading/trailing edge, spanning from the top down to just
+    /// before the menu (so it never clips off-screen or covers the settings).
     private func landscapeHistogram(size: CGSize) -> some View {
-        let span = max(160, size.height - dockReserve - 28)
+        let topMargin: CGFloat = 16
+        let span = max(140, size.height - menuReserve - topMargin)
         return HStack(spacing: 0) {
             if !physicalBottomLeading { Spacer() }
-            HistogramView(histogram: model.histogram)
-                .frame(width: span, height: 58)
-                .rotationEffect(deviceAngle)
-                .frame(width: 58)
+            VStack(spacing: 0) {
+                HistogramView(histogram: model.histogram)
+                    .frame(width: span, height: 56)
+                    .rotationEffect(deviceAngle)
+                    .frame(width: 56, height: span)
+                Spacer(minLength: 0)
+            }
             if physicalBottomLeading { Spacer() }
         }
-        .padding(.horizontal, 10)
-        // Shift toward the physical-bottom's far end so it clears the dock.
-        .padding(.bottom, physicalBottomLeading ? 0 : dockReserve)
-        .padding(.top, physicalBottomLeading ? dockReserve : 0)
+        .padding(physicalBottomLeading ? .leading : .trailing, 8)
+        .padding(.top, topMargin)
+        .padding(.bottom, menuReserve)
     }
 
     @ViewBuilder private var zoomOverlay: some View {
         if isLandscape {
-            // Physically: vertically centered, just left of the dock. In portrait
-            // coords that is horizontally centered, just above the dock.
+            // Physically: vertically centered, just left of the menu. In portrait
+            // coords that is horizontally centered, just above the menu.
             VStack(spacing: 0) {
                 Spacer()
                 ZoomSlider(model: model).facingUser(deviceAngle)
             }
-            .padding(.bottom, dockReserve)
+            .padding(.bottom, menuReserve)
         } else {
             // Portrait: bottom-right, sitting just above the menu (above the open
             // drawer, or above the command bar when closed).
