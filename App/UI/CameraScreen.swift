@@ -66,7 +66,8 @@ struct CameraScreen: View {
                 Spacer()
                 if model.histogramEnabled {
                     HistogramView(histogram: model.histogram)
-                        .padding(.horizontal, 12)
+                        .padding(.leading, 12)
+                        .padding(.trailing, histogramTrailingPadding)
                 }
                 ControlsPanel(model: model)
                     .padding(.horizontal, 12)
@@ -83,5 +84,13 @@ struct CameraScreen: View {
             }
         }
         .onDisappear { model.stopSession() }
+    }
+
+    /// Trailing margin for the histogram. When the zoom slider is shown AND the
+    /// settings drawer is open, the drawer pushes the histogram up into the
+    /// slider's row — stop the histogram short of the slider (slider ≈48pt wide
+    /// + 10pt inset) with a small gap. In every other state, keep the normal 12.
+    private var histogramTrailingPadding: CGFloat {
+        model.showZoomSlider && model.showSettings ? 70 : 12
     }
 }
