@@ -148,18 +148,24 @@ struct CameraScreen: View {
             }
             .padding(.bottom, dockReserve)
         } else {
-            HStack {
+            // Portrait: bottom-right, sitting just above the menu (above the open
+            // drawer, or above the command bar when closed).
+            VStack(spacing: 0) {
                 Spacer()
-                ZoomSlider(model: model)
-                    .facingUser(deviceAngle)
-                    .padding(.trailing, 10)
+                HStack {
+                    Spacer()
+                    ZoomSlider(model: model)
+                        .facingUser(deviceAngle)
+                        .padding(.trailing, 10)
+                }
             }
+            .padding(.bottom, model.showSettings ? 300 : 104)
         }
     }
 
-    /// Portrait-only trailing margin so the histogram clears the zoom slider when
-    /// the slider is shown and the settings drawer is open.
+    /// Portrait-only trailing margin so the histogram clears the zoom slider,
+    /// which sits in the lower-right whenever the slider is shown.
     private var histogramTrailingPadding: CGFloat {
-        model.showZoomSlider && model.showSettings ? 70 : 12
+        model.showZoomSlider ? 70 : 12
     }
 }
