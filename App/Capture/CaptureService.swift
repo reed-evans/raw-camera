@@ -19,6 +19,7 @@ final class CaptureService: NSObject, CameraCapturing {
     var onConfigured: ((ExposureLimits, Bool) -> Void)?
     var onCaptureFinished: ((String?) -> Void)?
     var onZoomRange: ((CGFloat, CGFloat) -> Void)?
+    var onCaptureCapabilities: ((CaptureCapabilities) -> Void)?
 
     /// Usable preview zoom is capped well below the device's huge digital max.
     private static let maxUsableZoom: CGFloat = 10.0
@@ -33,6 +34,11 @@ final class CaptureService: NSObject, CameraCapturing {
     private var photoOutput: AVCapturePhotoOutput?
     private var preferProRAW: Bool = true
     private var selectedRAWFormat: RAWFormat?
+    /// Advanced capture options (48MP / bracket / 10-bit HDR / quality).
+    /// Mutated only on `sessionQueue`.
+    private var captureOptions = CaptureOptions()
+    /// The session's auto-chosen color space, restored when 10-bit HDR is off.
+    private var standardColorSpace: AVCaptureColorSpace = .sRGB
     private let logger = Logger(subsystem: "com.rawcamera", category: "CaptureService")
     /// Active capture delegates, retained across the async Photos save so
     /// `onCaptureFinished` is never dropped. AVFoundation does not retain the
@@ -210,6 +216,36 @@ final class CaptureService: NSObject, CameraCapturing {
             }
         }
     }
+
+    func setCaptureOptions(_ options: CaptureOptions) {
+        sessionQueue.async { [weak self] in
+            guard let self else { return }
+            let hdrChanged = options.hdr10BitColor != self.captureOptions.hdr10BitColor
+            self.captureOptions = options
+            if hdrChanged { self.applyColorSpace() }
+        }
+    }
+
+    /// Switch the device color space between the session's auto-managed default
+    /// and 10-bit HLG/BT.2020 (when the active format supports it). Runs on
+    /// `sessionQueue`. Manual color-space control requires disabling the
+    /// session's automatic wide-color management.
+    private func applyColorSpace() {
+        guard let device = videoDevice else { return }
+        let wantsHDR =
+            captureOptions.hdr10BitColor
+            && device.activeFormat.supportedColorSpaces.contains(.HLG_BT2020)
+        session.beginConfiguration()
+        session.automaticallyConfiguresCaptureDeviceForWideColor = false
+        do {
+            try device.lockForConfiguration()
+            defer { device.unlockForConfiguration() }
+            device.activeColorSpace = wantsHDR ? .HLG_BT2020 : standardColorSpace
+        } catch {
+            logger.error("applyColorSpace failed: \(error.localizedDescription, privacy: .public)")
+        }
+        session.commitConfiguration()
+    }
 }
 
 // MARK: - Session configuration (fileprivate helpers)
@@ -302,9 +338,24 @@ extension CaptureService {
         exposureLimits = limits
         isProRAWAvailable = photoOutput.isAppleProRAWSupported
         updateSelectedRAWFormat()
+
+        // Raise the output ceilings once so per-shot settings can opt in:
+        // largest supported still dimensions (48MP on supporting hardware) and
+        // maximum quality prioritization. Record the auto-chosen color space so
+        // the 10-bit HDR toggle can restore it.
+        photoOutput.maxPhotoQualityPrioritization = .quality
+        if let dims = CapturePhotoSettingsFactory.largestPhotoDimensions(of: device) {
+            photoOutput.maxPhotoDimensions = dims
+        }
+        standardColorSpace = device.activeColorSpace
+        // Apply any options set before configuration (e.g. 10-bit toggled at
+        // launch, before the device existed).
+        if captureOptions.hdr10BitColor { applyColorSpace() }
+
         onConfigured?(limits, isProRAWAvailable)
         let maxZoom = min(device.maxAvailableVideoZoomFactor, CaptureService.maxUsableZoom)
         onZoomRange?(device.minAvailableVideoZoomFactor, maxZoom)
+        onCaptureCapabilities?(capabilities(device: device, photoOutput: photoOutput))
     }
 
     fileprivate func updateSelectedRAWFormat() {
@@ -320,11 +371,16 @@ extension CaptureService {
     }
 
     fileprivate func performCapturePhoto() {
-        guard let photoOutput else {
+        guard let photoOutput, let device = videoDevice else {
             onCaptureFinished?("Photo output not configured.")
             return
         }
-        let settings = buildCaptureSettings(photoOutput: photoOutput)
+        let settings = CapturePhotoSettingsFactory.make(
+            photoOutput: photoOutput,
+            device: device,
+            rawFormat: selectedRAWFormat,
+            options: captureOptions
+        )
         let processor = PhotoCaptureProcessor(onCaptureFinished: onCaptureFinished)
         // Retain the delegate across the async Photos save; release it when the
         // capture terminates so it isn't deallocated mid-flight (and the result
@@ -336,19 +392,20 @@ extension CaptureService {
         photoOutput.capturePhoto(with: settings, delegate: processor)
     }
 
-    private func buildCaptureSettings(photoOutput: AVCapturePhotoOutput) -> AVCapturePhotoSettings {
-        guard let rawFormat = selectedRAWFormat,
-            photoOutput.availableRawPhotoPixelFormatTypes.contains(rawFormat.pixelFormat)
-        else {
-            return AVCapturePhotoSettings(format: [AVVideoCodecKey: AVVideoCodecType.hevc])
-        }
-        if rawFormat.isProRAW {
-            return AVCapturePhotoSettings(
-                rawPixelFormatType: rawFormat.pixelFormat,
-                processedFormat: [AVVideoCodecKey: AVVideoCodecType.hevc]
-            )
-        }
-        return AVCapturePhotoSettings(rawPixelFormatType: rawFormat.pixelFormat)
+    /// What the configured device supports, for the settings UI.
+    private func capabilities(
+        device: AVCaptureDevice,
+        photoOutput: AVCapturePhotoOutput
+    ) -> CaptureCapabilities {
+        let dims = device.activeFormat.supportedMaxPhotoDimensions
+        let maxArea = dims.map { Int($0.width) * Int($0.height) }.max() ?? 0
+        let hasBayer = photoOutput.availableRawPhotoPixelFormatTypes
+            .contains(where: { AVCapturePhotoOutput.isBayerRAWPixelFormat($0) })
+        return CaptureCapabilities(
+            supports48MP: maxArea > 20_000_000,  // beyond the 12MP binned default
+            supportsRAWBracketing: hasBayer && photoOutput.maxBracketedCapturePhotoCount >= 2,
+            supports10BitHDR: device.activeFormat.supportedColorSpaces.contains(.HLG_BT2020)
+        )
     }
 }
 

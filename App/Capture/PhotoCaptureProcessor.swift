@@ -16,8 +16,9 @@ final class PhotoCaptureProcessor: NSObject {
     /// Lets the owner retain the delegate across the async save without leaking.
     var onComplete: ((PhotoCaptureProcessor) -> Void)?
 
-    /// Accumulated DNG data from the RAW photo output.
-    private var rawData: Data?
+    /// Accumulated DNG data from the RAW photo output — one entry per frame
+    /// (a single capture yields one; an exposure bracket yields one per frame).
+    private var rawDatas: [Data] = []
     /// Processed/compressed photo data for ProRAW (used as the alternatePhoto).
     private var processedData: Data?
     /// Whether the capture settings requested a ProRAW output.
@@ -50,8 +51,11 @@ extension PhotoCaptureProcessor: AVCapturePhotoCaptureDelegate {
         }
 
         if photo.isRawPhoto {
-            rawData = photo.fileDataRepresentation()
-            if rawData == nil { logger.error("RAW fileDataRepresentation() returned nil.") }
+            if let data = photo.fileDataRepresentation() {
+                rawDatas.append(data)
+            } else {
+                logger.error("RAW fileDataRepresentation() returned nil.")
+            }
             // Determine ProRAW via the pixel buffer's format type.
             if let pixelBuffer = photo.pixelBuffer {
                 let fmt = CVPixelBufferGetPixelFormatType(pixelBuffer)
@@ -77,11 +81,11 @@ extension PhotoCaptureProcessor: AVCapturePhotoCaptureDelegate {
             finish(processingError)
             return
         }
-        guard let rawData else {
+        guard !rawDatas.isEmpty else {
             finish("No RAW data received from capture.")
             return
         }
-        saveToPhotos(rawData: rawData, processedData: processedData)
+        saveToPhotos(rawDatas: rawDatas, processedData: processedData)
     }
 
     /// Emits the capture result exactly once, then releases this processor via
@@ -101,35 +105,44 @@ extension PhotoCaptureProcessor: AVCapturePhotoCaptureDelegate {
 
     // MARK: - Private: Photos library save
 
-    private func saveToPhotos(rawData: Data, processedData: Data?) {
+    private func saveToPhotos(rawDatas: [Data], processedData: Data?) {
         // Photos reliably ingests a RAW DNG from a file URL with the correct
         // extension; raw bytes added via `data:` are often rejected with a generic
-        // "operation could not be completed". Stage the DNG to a temp .dng file.
-        let rawURL = FileManager.default.temporaryDirectory
-            .appendingPathComponent(UUID().uuidString)
-            .appendingPathExtension("dng")
-        do {
-            try rawData.write(to: rawURL)
-        } catch {
-            finish(describe(error, context: "writing temp DNG"))
-            return
+        // "operation could not be completed". Stage each DNG to a temp .dng file.
+        var rawURLs: [URL] = []
+        for rawData in rawDatas {
+            let url = FileManager.default.temporaryDirectory
+                .appendingPathComponent(UUID().uuidString)
+                .appendingPathExtension("dng")
+            do {
+                try rawData.write(to: url)
+                rawURLs.append(url)
+            } catch {
+                rawURLs.forEach { try? FileManager.default.removeItem(at: $0) }
+                finish(describe(error, context: "writing temp DNG"))
+                return
+            }
         }
 
+        let isProRAW = isProRAWCapture
         PHPhotoLibrary.shared().performChanges {
-            let request = PHAssetCreationRequest.forAsset()
             let rawOptions = PHAssetResourceCreationOptions()
             rawOptions.shouldMoveFile = true
-            if let processedData, self.isProRAWCapture {
+            if rawURLs.count == 1, let processedData, isProRAW {
                 // ProRAW: processed image is the primary photo, the DNG is the alternate.
+                let request = PHAssetCreationRequest.forAsset()
                 request.addResource(with: .photo, data: processedData, options: nil)
-                request.addResource(with: .alternatePhoto, fileURL: rawURL, options: rawOptions)
+                request.addResource(with: .alternatePhoto, fileURL: rawURLs[0], options: rawOptions)
             } else {
-                // Bayer RAW (or ProRAW with no paired processed image): DNG is the photo.
-                request.addResource(with: .photo, fileURL: rawURL, options: rawOptions)
+                // Bayer RAW / bracket frames: each DNG becomes its own asset.
+                for url in rawURLs {
+                    let request = PHAssetCreationRequest.forAsset()
+                    request.addResource(with: .photo, fileURL: url, options: rawOptions)
+                }
             }
         } completionHandler: { [weak self] success, error in
-            // If shouldMoveFile consumed the file this is a harmless no-op.
-            try? FileManager.default.removeItem(at: rawURL)
+            // If shouldMoveFile consumed the files this is a harmless no-op.
+            rawURLs.forEach { try? FileManager.default.removeItem(at: $0) }
             if success {
                 self?.finish(nil)
             } else if let error {

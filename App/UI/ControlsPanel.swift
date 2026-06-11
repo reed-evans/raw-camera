@@ -10,11 +10,10 @@ import SwiftUI
 /// settings slide up on demand and tuck away again, keeping the preview clear.
 struct ControlsPanel: View {
     @Bindable var model: CameraModel
-    @State private var showSettings = false
 
     var body: some View {
         VStack(spacing: 0) {
-            if showSettings {
+            if model.showSettings {
                 settingsDrawer
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             }
@@ -27,7 +26,7 @@ struct ControlsPanel: View {
                 .strokeBorder(Color.white.opacity(0.08), lineWidth: 0.5)
         )
         .shadow(color: .black.opacity(0.45), radius: 24, x: 0, y: -4)
-        .animation(.spring(response: 0.34, dampingFraction: 0.86), value: showSettings)
+        .animation(.spring(response: 0.34, dampingFraction: 0.86), value: model.showSettings)
     }
 
     /// Slim, always-docked bar: status (left) · shutter (center) · settings toggle (right).
@@ -56,9 +55,9 @@ struct ControlsPanel: View {
 
     private var settingsToggle: some View {
         Button {
-            showSettings.toggle()
+            model.showSettings.toggle()
         } label: {
-            Image(systemName: showSettings ? "chevron.down" : "slider.horizontal.3")
+            Image(systemName: model.showSettings ? "chevron.down" : "slider.horizontal.3")
                 .font(.system(size: 15, weight: .semibold))
                 .foregroundStyle(Color.white.opacity(0.85))
                 .frame(width: 40, height: 40)
@@ -66,7 +65,7 @@ struct ControlsPanel: View {
                 .overlay(Circle().strokeBorder(Color.white.opacity(0.12), lineWidth: 0.5))
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(showSettings ? "Hide settings" : "Show settings")
+        .accessibilityLabel(model.showSettings ? "Hide settings" : "Show settings")
     }
 
     /// Settings drawer: one horizontal row of compact sections that sizes to its
@@ -81,6 +80,7 @@ struct ControlsPanel: View {
                     AspectSection(model: model)
                     MonitoringSection(model: model)
                     FormatSection(model: model)
+                    CaptureSection(model: model)
                 }
                 .padding(.horizontal, 20)
                 .padding(.top, 14)
@@ -259,6 +259,38 @@ private struct FormatSection: View {
                     .foregroundStyle(model.isProRAWAvailable ? Color.green.opacity(0.8) : Color.white.opacity(0.35))
             }
         }
+    }
+}
+
+private struct CaptureSection: View {
+    @Bindable var model: CameraModel
+
+    var body: some View {
+        CamSection(label: "CAPTURE") {
+            VStack(spacing: 8) {
+                optionRow("48MP", value: $model.highRes48MP, available: model.is48MPAvailable)
+                optionRow("BRKT", value: $model.rawBracketing, available: model.isRAWBracketingAvailable)
+                optionRow("10BIT", value: $model.hdr10Bit, available: model.is10BitHDRAvailable)
+                optionRow("MAX Q", value: $model.maxQuality, available: true)
+            }
+        }
+    }
+
+    /// A MonRow that pushes the combined capture options on change and dims
+    /// when the device doesn't support the option.
+    private func optionRow(_ label: String, value: Binding<Bool>, available: Bool) -> some View {
+        MonRow(
+            label: label,
+            isOn: Binding(
+                get: { value.wrappedValue },
+                set: { newValue in
+                    value.wrappedValue = newValue
+                    model.pushCaptureOptions()
+                }
+            )
+        )
+        .disabled(!available)
+        .opacity(available ? 1.0 : 0.35)
     }
 }
 

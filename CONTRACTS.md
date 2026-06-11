@@ -92,6 +92,15 @@ guarded at compile time by `static_assert` in `CameraShaders.metal` (T0-2).
 range. `CameraModel` exposes `zoomFactor`/`minZoom`/`maxZoom` and drives it from
 pinch + an optional vertical slider (`showZoomSlider`).
 
+**Amendment A3 (advanced capture options):** `CaptureOptions` /
+`CaptureCapabilities` value types added to CameraCore, plus
+`onCaptureCapabilities: ((CaptureCapabilities) -> Void)?` and
+`func setCaptureOptions(_ options: CaptureOptions)` on `CameraCapturing`.
+Options: 48MP full-res stills, 3-shot ±2EV Bayer-RAW exposure bracketing
+(`ExposureBracket.biases` is Tier-1 tested), 10-bit HLG/BT.2020 color space for
+processed output, and `.quality` photo prioritization. Unsupported options are
+ignored; the UI disables them per the reported capabilities.
+
 ---
 
 ## 4. `PreviewUniforms` — FROZEN ABI (grader T1-7)

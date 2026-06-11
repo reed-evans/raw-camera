@@ -32,6 +32,10 @@ public protocol CameraCapturing: AnyObject {
     /// zoom range (min...max). Consumers hop to the main actor.
     var onZoomRange: ((_ minZoom: CGFloat, _ maxZoom: CGFloat) -> Void)? { get set }
 
+    /// Fires after configuration (background queue): which advanced capture
+    /// features (48MP, RAW bracketing, 10-bit HDR) the device supports.
+    var onCaptureCapabilities: ((CaptureCapabilities) -> Void)? { get set }
+
     /// Active-format exposure range; `.unset` until a device is configured.
     var exposureLimits: ExposureLimits { get }
 
@@ -60,4 +64,8 @@ public protocol CameraCapturing: AnyObject {
 
     /// Set the video zoom factor; the implementation clamps to the device range.
     func setZoom(factor: CGFloat)
+
+    /// Apply advanced capture options (48MP / RAW bracket / 10-bit HDR / max
+    /// quality). Unsupported options are ignored per `onCaptureCapabilities`.
+    func setCaptureOptions(_ options: CaptureOptions)
 }

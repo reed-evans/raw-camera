@@ -9,6 +9,7 @@ import SwiftUI
         var onConfigured: ((ExposureLimits, Bool) -> Void)?
         var onCaptureFinished: ((String?) -> Void)?
         var onZoomRange: ((CGFloat, CGFloat) -> Void)?
+        var onCaptureCapabilities: ((CaptureCapabilities) -> Void)?
         var exposureLimits = ExposureLimits(
             minISO: 25, maxISO: 6400,
             minShutterSeconds: 1.0 / 8000, maxShutterSeconds: 30.0
@@ -26,6 +27,7 @@ import SwiftUI
         func setAutoFocus() {}
         func setPreferProRAW(_ prefer: Bool) {}
         func setZoom(factor: CGFloat) {}
+        func setCaptureOptions(_ options: CaptureOptions) {}
     }
 
     #Preview("collapsed") {

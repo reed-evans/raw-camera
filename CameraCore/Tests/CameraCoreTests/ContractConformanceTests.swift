@@ -14,6 +14,7 @@ final class MockCaptureService: CameraCapturing {
     var onConfigured: ((ExposureLimits, Bool) -> Void)?
     var onCaptureFinished: ((String?) -> Void)?
     var onZoomRange: ((CGFloat, CGFloat) -> Void)?
+    var onCaptureCapabilities: ((CaptureCapabilities) -> Void)?
     private(set) var exposureLimits: ExposureLimits = .unset
     private(set) var isProRAWAvailable: Bool = false
 
@@ -36,6 +37,7 @@ final class MockCaptureService: CameraCapturing {
     func setAutoFocus() {}
     func setPreferProRAW(_ prefer: Bool) {}
     func setZoom(factor: CGFloat) {}
+    func setCaptureOptions(_ options: CaptureOptions) {}
 }
 
 @Suite("T1-6 contract conformance")

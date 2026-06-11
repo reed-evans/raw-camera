@@ -40,6 +40,18 @@ public final class CameraModel {
     public var maxZoom: CGFloat = 10.0
     /// Show the vertical zoom slider overlay (settings-configurable).
     var showZoomSlider: Bool = false
+    /// Whether the settings drawer is expanded (UI state shared so overlays can
+    /// make room for each other).
+    var showSettings: Bool = false
+
+    // MARK: Advanced capture options (amendment A3)
+    public var highRes48MP: Bool = false
+    public var rawBracketing: Bool = false
+    public var hdr10Bit: Bool = false
+    public var maxQuality: Bool = true
+    public var is48MPAvailable: Bool = false
+    public var isRAWBracketingAvailable: Bool = false
+    public var is10BitHDRAvailable: Bool = false
 
     // MARK: Monitoring toggles
     public var zebraEnabled: Bool = false
@@ -132,6 +144,14 @@ public final class CameraModel {
                 self?.maxZoom = max(lo, hi)
             }
         }
+        service.onCaptureCapabilities = { [weak self] caps in
+            Task { @MainActor in
+                guard let self else { return }
+                self.is48MPAvailable = caps.supports48MP
+                self.isRAWBracketingAvailable = caps.supportsRAWBracketing
+                self.is10BitHDRAvailable = caps.supports10BitHDR
+            }
+        }
     }
 
     // MARK: Intents (frozen signatures; integration completes the bodies)
@@ -196,5 +216,18 @@ public final class CameraModel {
         let clamped = min(max(factor, minZoom), maxZoom)
         zoomFactor = clamped
         service.setZoom(factor: clamped)
+    }
+
+    /// Push the current advanced capture options to the service. Called by the
+    /// settings toggles after they update their backing property.
+    public func pushCaptureOptions() {
+        service.setCaptureOptions(
+            CaptureOptions(
+                highResolution: highRes48MP,
+                rawBracketing: rawBracketing,
+                hdr10BitColor: hdr10Bit,
+                maxQuality: maxQuality
+            )
+        )
     }
 }
