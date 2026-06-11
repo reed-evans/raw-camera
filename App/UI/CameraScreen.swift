@@ -2,19 +2,29 @@ import CameraCore
 import SwiftUI
 import UIKit
 
-// OWNER: wt/integration. Phase-0 stub composing the preview, controls, and
-// monitoring overlays over the shared `CameraModel`.
+// OWNER: wt/integration. Composes the preview, controls, and monitoring overlays
+// over the shared `CameraModel`. The interface is locked to portrait; in
+// landscape the floating overlays are repositioned + counter-rotated so they face
+// the user (the preview itself is never rotated).
 struct CameraScreen: View {
     @State private var model: CameraModel
     @State private var pinching = false
     @State private var zoomAtPinchStart: CGFloat = 1.0
-    /// Physical-orientation counter-rotation for the overlay controls (the
-    /// interface is locked to portrait; the preview is never rotated).
     @State private var deviceAngle: Angle = .zero
 
     init(model: CameraModel) {
         _model = State(initialValue: model)
     }
+
+    // MARK: Orientation helpers
+
+    /// Held sideways (±90°).
+    private var isLandscape: Bool { abs(deviceAngle.degrees) == 90 }
+    /// For landscapeLeft (+90°) the physical bottom maps to the portrait leading
+    /// edge; for landscapeRight (−90°) it maps to the trailing edge.
+    private var physicalBottomLeading: Bool { deviceAngle.degrees == 90 }
+    /// Portrait height reserved for the dock so overlays clear the menu.
+    private let dockReserve: CGFloat = 116
 
     private func refreshOrientation() {
         if let angle = DeviceOrientationAngle.angle(for: UIDevice.current.orientation) {
@@ -23,70 +33,44 @@ struct CameraScreen: View {
     }
 
     var body: some View {
-        ZStack {
-            GeometryReader { proxy in
-                CameraMetalView(
-                    model: model,
-                    histogramProducer: model.histogramProducer,
-                    framePump: model.framePump
-                )
-                .ignoresSafeArea()
-                .contentShape(Rectangle())
-                .onTapGesture { location in
-                    // Normalized device coords (0...1, top-left origin) per the
-                    // CameraCapturing.focus(at:) contract.
-                    let size = proxy.size
-                    guard size.width > 0, size.height > 0 else { return }
-                    model.focusTap(
-                        at: CGPoint(
-                            x: location.x / size.width,
-                            y: location.y / size.height
+        GeometryReader { geo in
+            ZStack {
+                preview(size: geo.size)
+
+                // Level (top) + portrait histogram + dock.
+                VStack(spacing: 10) {
+                    if model.levelGuideEnabled {
+                        LevelGuideView(
+                            rollDegrees: model.rollDegrees,
+                            pitchDegrees: model.pitchDegrees,
+                            isLevel: model.isLevel
                         )
-                    )
-                }
-                .gesture(
-                    MagnifyGesture()
-                        .onChanged { value in
-                            if !pinching {
-                                pinching = true
-                                zoomAtPinchStart = model.zoomFactor
-                            }
-                            model.setZoom(zoomAtPinchStart * value.magnification)
-                        }
-                        .onEnded { _ in pinching = false }
-                )
-            }
-            .ignoresSafeArea()
-
-            if model.showZoomSlider {
-                HStack {
-                    Spacer()
-                    ZoomSlider(model: model)
                         .facingUser(deviceAngle)
-                        .padding(.trailing, 10)
+                    }
+                    Spacer()
+                    if model.histogramEnabled && !isLandscape {
+                        HistogramView(histogram: model.histogram)
+                            .padding(.leading, 12)
+                            .padding(.trailing, histogramTrailingPadding)
+                    }
+                    ControlsPanel(model: model, angle: deviceAngle)
+                        .padding(.horizontal, 12)
+                        .padding(.bottom, 6)
                 }
-            }
 
-            VStack(spacing: 10) {
-                if model.levelGuideEnabled {
-                    LevelGuideView(
-                        rollDegrees: model.rollDegrees,
-                        pitchDegrees: model.pitchDegrees,
-                        isLevel: model.isLevel
-                    )
-                    .facingUser(deviceAngle)
+                // Landscape histogram: a rotated bar along the physical bottom,
+                // stopping short of the dock (physical right).
+                if model.histogramEnabled && isLandscape {
+                    landscapeHistogram(size: geo.size)
                 }
-                Spacer()
-                if model.histogramEnabled {
-                    HistogramView(histogram: model.histogram)
-                        .padding(.leading, 12)
-                        .padding(.trailing, histogramTrailingPadding)
+
+                if model.showZoomSlider {
+                    zoomOverlay
                 }
-                ControlsPanel(model: model, angle: deviceAngle)
-                    .padding(.horizontal, 12)
-                    .padding(.bottom, 6)
             }
+            .frame(width: geo.size.width, height: geo.size.height)
         }
+        .ignoresSafeArea()
         .statusBarHidden(true)
         .onAppear {
             UIDevice.current.beginGeneratingDeviceOrientationNotifications()
@@ -97,8 +81,7 @@ struct CameraScreen: View {
         }
         .task {
             // Start the session only after camera access is granted — otherwise
-            // it runs with no access and the preview stays black. `.task` runs on
-            // the main actor, so the @MainActor model call is safe here.
+            // it runs with no access and the preview stays black.
             if await Permissions.ensureCaptureAccess() {
                 model.startSession()
             }
@@ -109,10 +92,73 @@ struct CameraScreen: View {
         }
     }
 
-    /// Trailing margin for the histogram. When the zoom slider is shown AND the
-    /// settings drawer is open, the drawer pushes the histogram up into the
-    /// slider's row — stop the histogram short of the slider (slider ≈48pt wide
-    /// + 10pt inset) with a small gap. In every other state, keep the normal 12.
+    // MARK: Pieces
+
+    private func preview(size: CGSize) -> some View {
+        CameraMetalView(
+            model: model,
+            histogramProducer: model.histogramProducer,
+            framePump: model.framePump
+        )
+        .ignoresSafeArea()
+        .contentShape(Rectangle())
+        .onTapGesture { location in
+            // Normalized device coords (0...1, top-left origin) per the contract.
+            guard size.width > 0, size.height > 0 else { return }
+            model.focusTap(at: CGPoint(x: location.x / size.width, y: location.y / size.height))
+        }
+        .gesture(
+            MagnifyGesture()
+                .onChanged { value in
+                    if !pinching {
+                        pinching = true
+                        zoomAtPinchStart = model.zoomFactor
+                    }
+                    model.setZoom(zoomAtPinchStart * value.magnification)
+                }
+                .onEnded { _ in pinching = false }
+        )
+    }
+
+    /// Histogram rotated to run along the physical bottom edge, ending before the
+    /// dock. Its pre-rotation width becomes the physical-horizontal length.
+    private func landscapeHistogram(size: CGSize) -> some View {
+        let span = max(160, size.height - dockReserve - 28)
+        return HStack(spacing: 0) {
+            if !physicalBottomLeading { Spacer() }
+            HistogramView(histogram: model.histogram)
+                .frame(width: span, height: 58)
+                .rotationEffect(deviceAngle)
+                .frame(width: 58)
+            if physicalBottomLeading { Spacer() }
+        }
+        .padding(.horizontal, 10)
+        // Shift toward the physical-bottom's far end so it clears the dock.
+        .padding(.bottom, physicalBottomLeading ? 0 : dockReserve)
+        .padding(.top, physicalBottomLeading ? dockReserve : 0)
+    }
+
+    @ViewBuilder private var zoomOverlay: some View {
+        if isLandscape {
+            // Physically: vertically centered, just left of the dock. In portrait
+            // coords that is horizontally centered, just above the dock.
+            VStack(spacing: 0) {
+                Spacer()
+                ZoomSlider(model: model).facingUser(deviceAngle)
+            }
+            .padding(.bottom, dockReserve)
+        } else {
+            HStack {
+                Spacer()
+                ZoomSlider(model: model)
+                    .facingUser(deviceAngle)
+                    .padding(.trailing, 10)
+            }
+        }
+    }
+
+    /// Portrait-only trailing margin so the histogram clears the zoom slider when
+    /// the slider is shown and the settings drawer is open.
     private var histogramTrailingPadding: CGFloat {
         model.showZoomSlider && model.showSettings ? 70 : 12
     }

@@ -75,7 +75,7 @@ struct ControlsPanel: View {
     private var settingsDrawer: some View {
         VStack(spacing: 0) {
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(alignment: .top, spacing: 24) {
+                HStack(alignment: .center, spacing: 24) {
                     Group {
                         ExposureSection(model: model)
                         WhiteBalanceSection(model: model)
@@ -331,11 +331,11 @@ private struct CamSection<C: View>: View {
     @ViewBuilder let content: C
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .center, spacing: 8) {
             Text(label).font(.system(size: 9, weight: .semibold, design: .monospaced))
                 .tracking(1.2).foregroundStyle(Color.white.opacity(0.45))
             content
-        }.frame(minWidth: 90, alignment: .leading)
+        }.frame(minWidth: 90, alignment: .center)
     }
 }
 
