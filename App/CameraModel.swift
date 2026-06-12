@@ -58,7 +58,7 @@ public final class CameraModel {
     public var zebraThreshold: Float = 0.95
     public var focusPeakingEnabled: Bool = false
     public var focusPeakingThreshold: Float = 0.15
-    public var histogramEnabled: Bool = true
+    public var histogramEnabled: Bool = false
     public var levelGuideEnabled: Bool = true
 
     // MARK: Monitoring data
