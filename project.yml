@@ -24,10 +24,12 @@ targets:
         GENERATE_INFOPLIST_FILE: NO
         SWIFT_VERSION: "6.0"
         SWIFT_STRICT_CONCURRENCY: complete
-        TARGETED_DEVICE_FAMILY: "1,2"
-        # Automatic signing for the on-device run (Tier 3 gate). Set your team in
-        # Xcode > Signing & Capabilities, or set DEVELOPMENT_TEAM here.
+        # iPhone-only: a portrait-locked camera app can't satisfy the iPad
+        # all-orientations requirement App Store validation enforces.
+        TARGETED_DEVICE_FAMILY: "1"
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         CODE_SIGN_STYLE: Automatic
+        DEVELOPMENT_TEAM: Q8G4Y7Y9QR
         # NOTE: CI builds pass CODE_SIGNING_ALLOWED=NO on the xcodebuild command
         # line (see scripts/gates.sh) — it is intentionally NOT baked in here, so
         # Xcode can sign for a device.
