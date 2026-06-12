@@ -122,15 +122,33 @@ private struct ShutterButton: View {
     let action: () -> Void
 
     var body: some View {
-        Button(action: action) {
-            ZStack {
-                Circle().strokeBorder(Color.white.opacity(0.6), lineWidth: 3).frame(width: 52, height: 52)
-                Circle().fill(isRunning ? Color.white : Color.white.opacity(0.25))
-                    .frame(width: 42, height: 42)
+        // Glass must come from the button style, never a label background —
+        // a glassEffect nested inside the panel's glass swallows the tap
+        // (see glassIconButton in LiquidGlass.swift).
+        if #available(iOS 26.0, *) {
+            Button(action: action) { disc.padding(0) }
+                .buttonStyle(.glassProminent)
+                .buttonBorderShape(.circle)
+                .tint(Color.white.opacity(0.15))
+                .clipShape(Circle())
+                .disabled(!isRunning).opacity(isRunning ? 1.0 : 0.45)
+        } else {
+            Button(action: action) {
+                ZStack {
+                    Circle().strokeBorder(Color.white.opacity(0.6), lineWidth: 3)
+                        .frame(width: 52, height: 52)
+                    disc
+                }
             }
+            .buttonStyle(ShutterButtonStyle())
+            .disabled(!isRunning).opacity(isRunning ? 1.0 : 0.45)
         }
-        .buttonStyle(ShutterButtonStyle())
-        .disabled(!isRunning).opacity(isRunning ? 1.0 : 0.45)
+    }
+
+    /// The white capture disc inside the ring.
+    private var disc: some View {
+        Circle().fill(isRunning ? Color.white : Color.white.opacity(0.25))
+            .frame(width: 42, height: 42)
     }
 }
 

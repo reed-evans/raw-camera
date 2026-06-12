@@ -21,7 +21,8 @@ extension View {
     @ViewBuilder
     func glassIconButton() -> some View {
         if #available(iOS 26.0, *) {
-            buttonStyle(.glass)
+            buttonStyle(.glassProminent)
+                .tint(Color.white.opacity(0.1))
         } else {
             buttonStyle(.plain)
                 .background(Color.white.opacity(0.08), in: Circle())
