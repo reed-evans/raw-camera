@@ -13,7 +13,7 @@ struct ZoomSlider: View {
             Text(String(format: "%.1f×", model.zoomFactor))
                 .font(.system(size: 11, weight: .bold, design: .monospaced))
                 .foregroundStyle(.white)
-                .frame(width: 44)
+                .frame(width: 40)
             Slider(
                 value: Binding(get: { model.zoomFactor }, set: { model.setZoom($0) }),
                 in: lo...hi

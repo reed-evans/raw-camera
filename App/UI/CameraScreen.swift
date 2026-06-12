@@ -11,6 +11,9 @@ struct CameraScreen: View {
     @State private var pinching = false
     @State private var zoomAtPinchStart: CGFloat = 1.0
     @State private var deviceAngle: Angle = .zero
+    /// Measured footprint of the controls panel (including its bottom padding),
+    /// captured below; 0 until the first layout pass.
+    @State private var panelFootprint: CGFloat = 0
 
     init(model: CameraModel) {
         _model = State(initialValue: model)
@@ -52,6 +55,16 @@ struct CameraScreen: View {
                     ControlsPanel(model: model, angle: deviceAngle)
                         .padding(.horizontal, 12)
                         .padding(.bottom, 6)
+                        .onGeometryChange(for: CGFloat.self) { proxy in
+                            proxy.size.height
+                        } action: {
+                            panelFootprint = $0
+                        }
+                        .overlay(alignment: .top) {
+                            if model.showZoomSlider {
+                                zoomSliderAbovePanel
+                            }
+                        }
                 }
 
                 // Landscape histogram: a rotated bar along the physical bottom,
@@ -60,9 +73,6 @@ struct CameraScreen: View {
                     landscapeHistogram(size: geo.size)
                 }
 
-                if model.showZoomSlider {
-                    zoomOverlay
-                }
             }
             .frame(width: geo.size.width, height: geo.size.height)
         }
@@ -116,13 +126,44 @@ struct CameraScreen: View {
         )
     }
 
-    /// Reserve at the physical-right (portrait bottom) so overlays clear the menu,
-    /// which is taller when the settings drawer is open.
-    private var menuReserve: CGFloat { model.showSettings ? 300 : 110 }
+    /// Reserve at the physical-right (portrait bottom) so overlays clear the
+    /// menu. The panel's measured footprint covers both states — closed it is
+    /// just the command bar, open it includes the drawer — so no hardcoded
+    /// heights; 100 is only the fallback before the first layout pass.
+    private var menuReserve: CGFloat {
+        panelFootprint > 0 ? panelFootprint : 100
+    }
 
-    /// The zoom slider hugs the menu in landscape — a smaller inset than the full
-    /// menu reserve so it sits right next to the panel rather than mid-screen.
-    private var landscapeZoomInset: CGFloat { model.showSettings ? 175 : 15 }
+    /// The zoom slider anchored above the panel as a layout overlay, so its
+    /// position is derived (never measured into state — measurement can go
+    /// stale mid-animation) and it rides the drawer's spring. A zero-height
+    /// frame pinned to the panel's top edge bottom-aligns the slider so it
+    /// extends upward, with its visible bottom 10pt above the panel. In
+    /// landscape the counter-rotation is a bare rotationEffect (layout box
+    /// unchanged), so the visible bottom sits (height − width) / 2 above the
+    /// layout box's bottom; the bottom guide compensates for that lift.
+    ///
+    /// If this is ever freed from the control panel and measurement needed
+    /// make sure something always reads the state (or compute it inside a
+    /// GeometryReader/custom Layout instead of state)
+    private var zoomSliderAbovePanel: some View {
+        // The gap matches the histogram's VStack spacing so the slider's
+        // bottom lines up with the histogram's bottom edge.
+        let gap: CGFloat = 10
+        return ZoomSlider(model: model)
+            .facingUser(deviceAngle)
+            .padding(.trailing, isLandscape ? 0 : 10)
+            // The gap lives INSIDE the guide, not in a bottom padding: padding
+            // applied after an explicit alignment guide does not shift the
+            // guide, so a padding-based gap is silently eaten.
+            .alignmentGuide(.bottom) { d in
+                let rotationLift = isLandscape ? (d.height - d.width) / 2 : 0
+                return d[.bottom] + gap - rotationLift
+            }
+            .frame(
+                maxWidth: .infinity, maxHeight: 0,
+                alignment: isLandscape ? .bottom : .bottomTrailing)
+    }
 
     /// Histogram rotated to run along the physical bottom edge: a fixed-length
     /// strip pinned to the portrait leading/trailing edge, hanging from the top
@@ -144,32 +185,6 @@ struct CameraScreen: View {
         }
         .padding(physicalBottomLeading ? .leading : .trailing, 27)
         .padding(.top, topMargin)
-    }
-
-    @ViewBuilder private var zoomOverlay: some View {
-        if isLandscape {
-            // Physically: sitting right next to the menu (just left of it). In
-            // portrait coords that is horizontally centered, just above the menu —
-            // a smaller inset than the histogram so it tucks up against the panel.
-            VStack(spacing: 0) {
-                Spacer()
-                ZoomSlider(model: model).facingUser(deviceAngle)
-            }
-            .padding(.bottom, landscapeZoomInset)
-        } else {
-            // Portrait: bottom-right, sitting just above the menu (above the open
-            // drawer, or above the command bar when closed).
-            VStack(spacing: 0) {
-                Spacer()
-                HStack {
-                    Spacer()
-                    ZoomSlider(model: model)
-                        .facingUser(deviceAngle)
-                        .padding(.trailing, 10)
-                }
-            }
-            .padding(.bottom, model.showSettings ? 300 : 104)
-        }
     }
 
     /// Portrait-only trailing margin so the histogram clears the zoom slider,

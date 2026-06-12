@@ -41,7 +41,6 @@ final class ControlsPanelUITests: XCTestCase {
     /// long dimension to greedy slider rows, blowing it up to the full screen).
     @MainActor
     func testLandscapeManualSlidersStayUnderModeToggle() {
-        XCUIDevice.shared.orientation = .landscapeLeft
         defer { XCUIDevice.shared.orientation = .portrait }
 
         let app = XCUIApplication()
@@ -49,6 +48,11 @@ final class ControlsPanelUITests: XCTestCase {
 
         let show = app.buttons["Show settings"]
         XCTAssertTrue(show.waitForExistence(timeout: 10), "settings toggle not found")
+
+        // Rotate AFTER launch: the running app reliably receives the orientation
+        // notification, whereas a pre-launch set can be swallowed when the
+        // simulator's orientation state is stale (seen after manual simctl runs).
+        XCUIDevice.shared.orientation = .landscapeLeft
         show.tap()
 
         let exposure = app.staticTexts["EXPOSURE"]
@@ -79,6 +83,39 @@ final class ControlsPanelUITests: XCTestCase {
         add(shot)
     }
 
+    /// Regression: revealing the zoom slider while the drawer is open must
+    /// place it above the panel on the FIRST reveal, not on top of the drawer.
+    @MainActor
+    func testZoomSliderClearsOpenDrawerOnFirstReveal() {
+        let app = XCUIApplication()
+        app.launch()
+
+        let show = app.buttons["Show settings"]
+        XCTAssertTrue(show.waitForExistence(timeout: 10), "settings toggle not found")
+        show.tap()
+
+        let monitor = app.staticTexts["MONITOR"]
+        XCTAssertTrue(monitor.waitForExistence(timeout: 5), "drawer did not open")
+        // Let the drawer's opening spring settle: nearest-element math against
+        // mid-animation frames can land the tap on the row below (ZEBRA).
+        Thread.sleep(forTimeInterval: 0.6)
+
+        // Flip the ZOOM monitor switch (switches carry no labels — pick the
+        // one nearest the ZOOM caption).
+        let zoomLabel = app.staticTexts["ZOOM"]
+        XCTAssertTrue(zoomLabel.waitForExistence(timeout: 2), "ZOOM row not found")
+        element(app.switches, nearest: zoomLabel).tap()
+
+        XCTAssertTrue(
+            app.staticTexts["1.0×"].waitForExistence(timeout: 3),
+            "zoom readout missing — wrong switch flipped or slider absent")
+        let slider = app.sliders.firstMatch
+        XCTAssertTrue(slider.waitForExistence(timeout: 3), "zoom slider did not appear")
+        XCTAssertLessThan(
+            slider.frame.maxY, monitor.frame.minY,
+            "zoom slider overlaps the open drawer on first reveal")
+    }
+
     /// The "M" segment nearest a section label. Every section has its own A/M
     /// segment and accessibility order is not stable across orientations, so
     /// `firstMatch` can land on the wrong section's switch.
@@ -91,5 +128,17 @@ final class ControlsPanelUITests: XCTestCase {
                 < hypot(b.frame.midX - anchor.midX, b.frame.midY - anchor.midY)
         }
         return nearest ?? app.buttons["M"].firstMatch
+    }
+
+    /// The element in `query` whose frame center is nearest the anchor's.
+    @MainActor
+    private func element(_ query: XCUIElementQuery, nearest anchor: XCUIElement) -> XCUIElement {
+        let center = anchor.frame
+        let candidates = query.allElementsBoundByIndex
+        let nearest = candidates.min { a, b in
+            hypot(a.frame.midX - center.midX, a.frame.midY - center.midY)
+                < hypot(b.frame.midX - center.midX, b.frame.midY - center.midY)
+        }
+        return nearest ?? query.firstMatch
     }
 }
