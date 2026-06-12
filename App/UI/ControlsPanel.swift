@@ -12,6 +12,7 @@ struct ControlsPanel: View {
     @Bindable var model: CameraModel
     /// Physical-orientation rotation applied to the controls (0° in portrait).
     var angle: Angle = .zero
+    @State var size: CGSize = .zero
 
     private var isLandscape: Bool { abs(angle.degrees) == 90 }
 
@@ -77,25 +78,47 @@ struct ControlsPanel: View {
     private var settingsDrawer: some View {
         VStack(spacing: 0) {
             ScrollView(.horizontal, showsIndicators: false) {
-                // Top-align sections in portrait so labels line up; center them
-                // when rotated so they read evenly in landscape.
-                HStack(alignment: isLandscape ? .center : .top, spacing: 24) {
-                    Group {
-                        ExposureSection(model: model)
-                        WhiteBalanceSection(model: model)
-                        FocusSection(model: model)
-                        AspectSection(model: model)
-                        MonitoringSection(model: model, isLandscape: isLandscape)
-                        FormatSection(model: model)
-                        CaptureSection(model: model)
+                if isLandscape {
+                    // Rotated stack: measure the unrotated size, then transpose
+                    // the frame so the rotated column occupies the right bounds.
+                    // Padding sits inside the rotation, so after the 90° turn the
+                    // vertical inset becomes the row-end buffer and the horizontal
+                    // inset pads the drawer's thickness edges.
+                    VStack(spacing: 20) {
+                        drawerSections
                     }
+                    .padding(.vertical, 16)
+                    .padding(.horizontal, 12)
                     .facingUser(angle)
+                    .onGeometryChange(for: CGSize.self) { proxy in
+                        proxy.size
+                    } action: {
+                        size = $0
+                    }
+                    .frame(width: size.height, height: size.width)
+                } else {
+                    // Portrait: natural-width sections in a padded, scrollable row.
+                    HStack(alignment: .top, spacing: 24) {
+                        drawerSections
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.top, 14)
+                    .padding(.bottom, 10)
                 }
-                .padding(.horizontal, 20)
-                .padding(.top, 14)
-                .padding(.bottom, 10)
             }
             Divider().overlay(Color.white.opacity(0.12))
+        }
+    }
+
+    @ViewBuilder private var drawerSections: some View {
+        Group {
+            ExposureSection(model: model)
+            WhiteBalanceSection(model: model)
+            FocusSection(model: model)
+            AspectSection(model: model)
+            MonitoringSection(model: model, isLandscape: isLandscape)
+            FormatSection(model: model)
+            CaptureSection(model: model)
         }
     }
 }
