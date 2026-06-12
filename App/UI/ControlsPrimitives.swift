@@ -79,6 +79,12 @@ struct ModeSegment: View {
     }
 }
 
+/// Fixed width of a manual-control slider row. The label row inside contains a
+/// Spacer, so the row MUST be width-pinned: in the landscape drawer the
+/// transposed reservation frame proposes the panel's long dimension as width,
+/// and an unpinned row expands to fill it (blowing the panel up to the screen).
+private let sliderRowWidth: CGFloat = 120
+
 struct FSlider: View {
     let label: String; let range: ClosedRange<Float>; @Binding var value: Float; let display: String
 
@@ -89,8 +95,9 @@ struct FSlider: View {
                 Spacer()
                 Text(display).font(.system(size: 10, weight: .semibold, design: .monospaced)).foregroundStyle(Color.white.opacity(0.85))
             }
-            Slider(value: $value, in: range).tint(.white).compactSlider(width: 120)
+            Slider(value: $value, in: range).tint(.white).compactSlider(width: sliderRowWidth)
         }
+        .frame(width: sliderRowWidth)
     }
 }
 
@@ -104,8 +111,9 @@ struct DSlider: View {
                 Spacer()
                 Text(display).font(.system(size: 10, weight: .semibold, design: .monospaced)).foregroundStyle(Color.white.opacity(0.85))
             }
-            Slider(value: $value, in: range).tint(.white).compactSlider(width: 120)
+            Slider(value: $value, in: range).tint(.white).compactSlider(width: sliderRowWidth)
         }
+        .frame(width: sliderRowWidth)
     }
 }
 
