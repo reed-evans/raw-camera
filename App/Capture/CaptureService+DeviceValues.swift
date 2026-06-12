@@ -40,7 +40,18 @@ extension CaptureService {
         lastDeviceValueEmit = now
         deviceValueLock.unlock()
 
-        let tempTint = device.temperatureAndTintValues(for: device.deviceWhiteBalanceGains)
+        // During auto-WB transients the device can report gains outside
+        // [1, maxWhiteBalanceGain] (or non-finite); the converter throws
+        // NSRangeException on those, so clamp before converting.
+        let raw = device.deviceWhiteBalanceGains
+        let clamped = WhiteBalance.clampGains(
+            WhiteBalanceGains(red: raw.redGain, green: raw.greenGain, blue: raw.blueGain),
+            maxGain: device.maxWhiteBalanceGain)
+        var safeGains = AVCaptureDevice.WhiteBalanceGains()
+        safeGains.redGain = clamped.red
+        safeGains.greenGain = clamped.green
+        safeGains.blueGain = clamped.blue
+        let tempTint = device.temperatureAndTintValues(for: safeGains)
         onDeviceValues?(
             DeviceValues(
                 iso: device.iso,
