@@ -134,4 +134,25 @@ struct LevelTests {
     func negativeAnglesWithinThreshold() {
         #expect(Level.isLevel(rollDegrees: -1.5, pitchDegrees: -1.5, threshold: 2.0))
     }
+
+    @Test("vertical (±90°) within threshold → true")
+    func verticalWithinThreshold() {
+        #expect(Level.isLevel(rollDegrees: 90.0, pitchDegrees: 0.0, threshold: 2.0))
+        #expect(Level.isLevel(rollDegrees: -90.0, pitchDegrees: 0.0, threshold: 2.0))
+        #expect(Level.isLevel(rollDegrees: 88.0, pitchDegrees: 0.0, threshold: 2.0))
+        #expect(Level.isLevel(rollDegrees: -92.0, pitchDegrees: 0.0, threshold: 2.0))
+    }
+
+    @Test("vertical just over threshold → false")
+    func verticalJustOverThreshold() {
+        #expect(!Level.isLevel(rollDegrees: 87.999, pitchDegrees: 0.0, threshold: 2.0))
+        #expect(!Level.isLevel(rollDegrees: 92.001, pitchDegrees: 0.0, threshold: 2.0))
+        #expect(!Level.isLevel(rollDegrees: -87.999, pitchDegrees: 0.0, threshold: 2.0))
+    }
+
+    @Test("midway angles stay not-level (regression: 45° once read as level)")
+    func midwayAnglesNotLevel() {
+        #expect(!Level.isLevel(rollDegrees: 45.0, pitchDegrees: 0.0, threshold: 2.0))
+        #expect(!Level.isLevel(rollDegrees: -45.0, pitchDegrees: 0.0, threshold: 2.0))
+    }
 }
