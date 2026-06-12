@@ -32,3 +32,24 @@ targets:
         # line (see scripts/gates.sh) — it is intentionally NOT baked in here, so
         # Xcode can sign for a device.
         MTL_FAST_MATH: YES
+  RAWCameraUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    deploymentTarget: "17.0"
+    sources:
+      - path: AppUITests
+    dependencies:
+      - target: RAWCamera
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.rawcamera.app.uitests
+        GENERATE_INFOPLIST_FILE: YES
+        SWIFT_VERSION: "6.0"
+schemes:
+  RAWCamera:
+    build:
+      targets:
+        RAWCamera: all
+    test:
+      targets:
+        - RAWCameraUITests

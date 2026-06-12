@@ -24,12 +24,8 @@ struct ControlsPanel: View {
             }
             commandBar
         }
-        .background(.ultraThinMaterial)
         .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .strokeBorder(Color.white.opacity(0.08), lineWidth: 0.5)
-        )
+        .liquidGlass(in: RoundedRectangle(cornerRadius: 20, style: .continuous))
         .shadow(color: .black.opacity(0.45), radius: 24, x: 0, y: -4)
         .animation(.spring(response: 0.34, dampingFraction: 0.86), value: model.showSettings)
     }
@@ -66,10 +62,8 @@ struct ControlsPanel: View {
                 .font(.system(size: 15, weight: .semibold))
                 .foregroundStyle(Color.white.opacity(0.85))
                 .frame(width: 40, height: 40)
-                .background(Color.white.opacity(0.08), in: Circle())
-                .overlay(Circle().strokeBorder(Color.white.opacity(0.12), lineWidth: 0.5))
         }
-        .buttonStyle(.plain)
+        .glassIconButton()
         .accessibilityLabel(model.showSettings ? "Hide settings" : "Show settings")
     }
 

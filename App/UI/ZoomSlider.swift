@@ -25,8 +25,7 @@ struct ZoomSlider: View {
         }
         .padding(.vertical, 12)
         .padding(.horizontal, 4)
-        .background(.ultraThinMaterial, in: Capsule())
-        .overlay(Capsule().strokeBorder(Color.white.opacity(0.1), lineWidth: 0.5))
+        .liquidGlass(in: Capsule())
     }
 }
 
