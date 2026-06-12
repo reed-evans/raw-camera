@@ -39,7 +39,6 @@ struct CameraScreen: View {
                         rollDegrees: model.rollDegrees,
                         isLevel: model.isLevel
                     )
-                    .facingUser(deviceAngle)
                 }
 
                 // Level (top) + portrait histogram + dock.
@@ -125,15 +124,13 @@ struct CameraScreen: View {
     /// menu reserve so it sits right next to the panel rather than mid-screen.
     private var landscapeZoomInset: CGFloat { model.showSettings ? 175 : 15 }
 
-    /// Histogram rotated to run along the physical bottom edge: a strip pinned to
-    /// the portrait leading/trailing edge, spanning from the top down to just
-    /// before the menu (so it never clips off-screen or covers the settings).
+    /// Histogram rotated to run along the physical bottom edge: a fixed-length
+    /// strip pinned to the portrait leading/trailing edge, hanging from the top
+    /// margin, shrinking only when the space above the menu can't fit it.
     private func landscapeHistogram(size: CGSize) -> some View {
-        let topMargin: CGFloat = 20
-        // Extra clearance over the menu reserve so the strip's far end is lifted
-        // clear of the screen edge instead of clipping off the bottom.
+        let topMargin: CGFloat = 40
         let bottomInset = menuReserve + 40
-        let span = max(140, size.height - bottomInset - topMargin)
+        let span: CGFloat = min(280, size.height - topMargin - bottomInset)
         return HStack(spacing: 0) {
             if !physicalBottomLeading { Spacer() }
             VStack(spacing: 0) {
@@ -141,13 +138,12 @@ struct CameraScreen: View {
                     .frame(width: span, height: 56)
                     .rotationEffect(deviceAngle)
                     .frame(width: 56, height: span)
-                Spacer(minLength: 0)
+                Spacer()
             }
             if physicalBottomLeading { Spacer() }
         }
-        .padding(physicalBottomLeading ? .leading : .trailing, 8)
+        .padding(physicalBottomLeading ? .leading : .trailing, 27)
         .padding(.top, topMargin)
-        .padding(.bottom, bottomInset)
     }
 
     @ViewBuilder private var zoomOverlay: some View {
