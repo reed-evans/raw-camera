@@ -11,9 +11,6 @@ struct CameraScreen: View {
     @State private var pinching = false
     @State private var zoomAtPinchStart: CGFloat = 1.0
     @State private var deviceAngle: Angle = .zero
-    /// Measured footprint of the controls panel (including its bottom padding),
-    /// captured below; 0 until the first layout pass.
-    @State private var panelFootprint: CGFloat = 0
 
     init(model: CameraModel) {
         _model = State(initialValue: model)
@@ -55,11 +52,6 @@ struct CameraScreen: View {
                     ControlsPanel(model: model, angle: deviceAngle)
                         .padding(.horizontal, 12)
                         .padding(.bottom, 6)
-                        .onGeometryChange(for: CGFloat.self) { proxy in
-                            proxy.size.height
-                        } action: {
-                            panelFootprint = $0
-                        }
                         .overlay(alignment: .top) {
                             if model.showZoomSlider {
                                 zoomSliderAbovePanel
@@ -67,12 +59,12 @@ struct CameraScreen: View {
                         }
                 }
 
-                // Landscape histogram: a rotated bar along the physical bottom,
-                // stopping short of the dock (physical right).
+                // Landscape histogram: a rotated bar along the physical
+                // bottom, floating at the far end from the dock (portrait
+                // top). A fixed screen position — no panel dependency.
                 if model.histogramEnabled && isLandscape {
-                    landscapeHistogram(size: geo.size)
+                    landscapeHistogramStrip
                 }
-
             }
             .frame(width: geo.size.width, height: geo.size.height)
         }
@@ -126,14 +118,6 @@ struct CameraScreen: View {
         )
     }
 
-    /// Reserve at the physical-right (portrait bottom) so overlays clear the
-    /// menu. The panel's measured footprint covers both states — closed it is
-    /// just the command bar, open it includes the drawer — so no hardcoded
-    /// heights; 100 is only the fallback before the first layout pass.
-    private var menuReserve: CGFloat {
-        panelFootprint > 0 ? panelFootprint : 100
-    }
-
     /// The zoom slider anchored above the panel as a layout overlay, so its
     /// position is derived (never measured into state — measurement can go
     /// stale mid-animation) and it rides the drawer's spring. A zero-height
@@ -166,25 +150,21 @@ struct CameraScreen: View {
     }
 
     /// Histogram rotated to run along the physical bottom edge: a fixed-length
-    /// strip pinned to the portrait leading/trailing edge, hanging from the top
-    /// margin, shrinking only when the space above the menu can't fit it.
-    private func landscapeHistogram(size: CGSize) -> some View {
-        let topMargin: CGFloat = 40
-        let bottomInset = menuReserve + 40
-        let span: CGFloat = min(280, size.height - topMargin - bottomInset)
-        return HStack(spacing: 0) {
-            if !physicalBottomLeading { Spacer() }
-            VStack(spacing: 0) {
-                HistogramView(histogram: model.histogram)
-                    .frame(width: span, height: 56)
-                    .rotationEffect(deviceAngle)
-                    .frame(width: 56, height: span)
-                Spacer()
-            }
-            if physicalBottomLeading { Spacer() }
-        }
-        .padding(physicalBottomLeading ? .leading : .trailing, 27)
-        .padding(.top, topMargin)
+    /// strip pinned to the portrait leading/trailing edge (the physical
+    /// bottom), floating at the portrait-top end of the screen — the far
+    /// corner from the dock. A fixed screen position needs no panel
+    /// measurement, so there is no stale-state risk.
+    private var landscapeHistogramStrip: some View {
+        let span: CGFloat = 280
+        return HistogramView(histogram: model.histogram)
+            .frame(width: span, height: 56)
+            .rotationEffect(deviceAngle)
+            .frame(width: 56, height: span)
+            .padding(physicalBottomLeading ? .leading : .trailing, 27)
+            .padding(.top, 24)
+            .frame(
+                maxWidth: .infinity, maxHeight: .infinity,
+                alignment: physicalBottomLeading ? .topLeading : .topTrailing)
     }
 
     /// Portrait-only trailing margin so the histogram clears the zoom slider,
