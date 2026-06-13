@@ -61,20 +61,20 @@ struct ModeSegment: View {
             segBtn("M", active: isManual) { if !isManual { isManual = true; onEnable() } }
         }
         .background(Color.white.opacity(0.06))
-        .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
         .overlay(
-            RoundedRectangle(cornerRadius: 6, style: .continuous)
+            RoundedRectangle(cornerRadius: 7, style: .continuous)
                 .strokeBorder(Color.white.opacity(0.12), lineWidth: 0.5))
     }
 
     @ViewBuilder
     private func segBtn(_ title: String, active: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            Text(title).font(.system(size: 10, weight: .semibold, design: .monospaced))
+            Text(title).font(.system(size: 13, weight: .semibold, design: .monospaced))
                 .foregroundStyle(active ? Color.black : Color.white.opacity(0.5))
-                .frame(width: 28, height: 20)
+                .frame(width: 36, height: 26)
                 .background(active ? Color.white : Color.clear)
-                .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
+                .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
         }.buttonStyle(.plain).animation(.easeOut(duration: 0.12), value: active)
     }
 }

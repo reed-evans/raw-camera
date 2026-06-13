@@ -344,25 +344,43 @@ private struct CaptureSection: View {
 private struct AspectSection: View {
     @Bindable var model: CameraModel
 
+    /// The aspect ratios split into rows of two for a 2×2 grid. Plain nested
+    /// stacks (not LazyVGrid) so the landscape drawer's measure/transpose pass
+    /// stays predictable.
+    private var rows: [[CameraAspectRatio]] {
+        let all = CameraAspectRatio.allCases
+        return stride(from: 0, to: all.count, by: 2).map { Array(all[$0..<min($0 + 2, all.count)]) }
+    }
+
     var body: some View {
         CamSection(label: "RATIO") {
-            HStack(spacing: 4) {
-                ForEach(CameraAspectRatio.allCases) { ratio in
-                    Button {
-                        model.aspectRatio = ratio
-                    } label: {
-                        Text(ratio.label)
-                            .font(.system(size: 9, weight: .semibold, design: .monospaced))
-                            .foregroundStyle(model.aspectRatio == ratio ? .black : .white.opacity(0.5))
-                            .padding(.horizontal, 6).padding(.vertical, 4)
-                            .background(
-                                model.aspectRatio == ratio ? Color.white : Color.white.opacity(0.06),
-                                in: RoundedRectangle(cornerRadius: 5, style: .continuous))
+            VStack(spacing: 4) {
+                ForEach(rows.indices, id: \.self) { row in
+                    HStack(spacing: 4) {
+                        ForEach(rows[row]) { ratio in
+                            ratioButton(ratio)
+                        }
                     }
-                    .buttonStyle(.plain)
                 }
             }
         }
+    }
+
+    @ViewBuilder
+    private func ratioButton(_ ratio: CameraAspectRatio) -> some View {
+        let active = model.aspectRatio == ratio
+        Button {
+            model.aspectRatio = ratio
+        } label: {
+            Text(ratio.label)
+                .font(.system(size: 13, weight: .semibold, design: .monospaced))
+                .foregroundStyle(active ? .black : .white.opacity(0.5))
+                .frame(width: 44, height: 26)
+                .background(
+                    active ? Color.white : Color.white.opacity(0.06),
+                    in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+        }
+        .buttonStyle(.plain)
     }
 }
 
