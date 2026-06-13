@@ -28,6 +28,7 @@ import SwiftUI
                 Spacer()
                 ControlsPanel(model: model)
                     .padding(.horizontal, 12)
+                    .environment(FineTuneSession())
             }
         }.preferredColorScheme(.dark)
     }
@@ -49,6 +50,7 @@ import SwiftUI
                 Spacer()
                 ControlsPanel(model: model)
                     .padding(.horizontal, 12)
+                    .environment(FineTuneSession())
             }
         }.preferredColorScheme(.dark)
     }

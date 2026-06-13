@@ -116,6 +116,55 @@ final class ControlsPanelUITests: XCTestCase {
             "zoom slider overlaps the open drawer on first reveal")
     }
 
+    /// Dragging a manual slider must change its value (proves the custom
+    /// grab-to-fine-tune slider drives the model, not just the inline native
+    /// control it replaced). Uses FOCUS: its lens position has a static 0...1
+    /// range, so it tunes in the simulator, where ISO/shutter are pinned by
+    /// the absent device's exposure limits.
+    @MainActor
+    func testManualSliderDragChangesValue() {
+        let app = XCUIApplication()
+        app.launch()
+
+        let show = app.buttons["Show settings"]
+        XCTAssertTrue(show.waitForExistence(timeout: 10), "settings toggle not found")
+        show.tap()
+
+        let focus = app.staticTexts["FOCUS"]
+        XCTAssertTrue(focus.waitForExistence(timeout: 5), "drawer did not open")
+        manualSegment(near: focus, in: app).tap()
+
+        let mfLabel = app.staticTexts["MF"].firstMatch
+        XCTAssertTrue(mfLabel.waitForExistence(timeout: 3), "MF slider did not appear")
+        let before = lensReadout(app)
+        XCTAssertNotNil(before, "could not read lens position")
+
+        // The track sits just below the MF label; a horizontal drag anywhere
+        // on it grabs the current value and moves it (delta-based).
+        let onTrack = mfLabel.coordinate(withNormalizedOffset: CGVector(dx: 0.3, dy: 0.5))
+            .withOffset(CGVector(dx: 0, dy: 20))
+        onTrack.press(
+            forDuration: 0.1, thenDragTo: onTrack.withOffset(CGVector(dx: 80, dy: 0)))
+
+        let after = lensReadout(app)
+        XCTAssertNotNil(after, "could not read lens position after drag")
+        XCTAssertGreaterThan(
+            after ?? 0, before ?? 0,
+            "dragging the focus slider right did not increase the lens position")
+    }
+
+    /// The lens position from the focus slider's readout (a bare decimal like
+    /// "0.50"), distinct from the longer auto/exposure readouts.
+    @MainActor
+    private func lensReadout(_ app: XCUIApplication) -> Double? {
+        for text in app.staticTexts.allElementsBoundByIndex {
+            if let value = Double(text.label), (0.0...1.0).contains(value) {
+                return value
+            }
+        }
+        return nil
+    }
+
     /// The "M" segment nearest a section label. Every section has its own A/M
     /// segment and accessibility order is not stable across orientations, so
     /// `firstMatch` can land on the wrong section's switch.

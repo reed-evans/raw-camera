@@ -192,13 +192,13 @@ private struct ExposureSection: View {
                         value: Binding(
                             get: { model.iso },
                             set: { model.setManualExposure(iso: $0, shutterSeconds: model.shutterSeconds) }),
-                        display: "ISO \(Int(model.iso.rounded()))")
+                        format: { "ISO \(Int($0.rounded()))" })
                     DSlider(
                         label: "SS", range: shutterRange,
                         value: Binding(
                             get: { model.shutterSeconds },
                             set: { model.setManualExposure(iso: model.iso, shutterSeconds: $0) }),
-                        display: shutterLabel(model.shutterSeconds))
+                        format: { shutterLabel($0) })
                 }.transition(.opacity.combined(with: .offset(y: 4)))
             } else {
                 AutoReadout(text: "ISO \(Int(model.iso.rounded())) · \(shutterLabel(model.shutterSeconds))")
@@ -224,13 +224,13 @@ private struct WhiteBalanceSection: View {
                         value: Binding(
                             get: { model.whiteBalanceTemperature },
                             set: { model.setWhiteBalance(temperature: $0, tint: model.whiteBalanceTint) }),
-                        display: "\(Int(model.whiteBalanceTemperature.rounded()))K")
+                        format: { "\(Int($0.rounded()))K" })
                     FSlider(
                         label: "TINT", range: CameraModel.tintRange,
                         value: Binding(
                             get: { model.whiteBalanceTint },
                             set: { model.setWhiteBalance(temperature: model.whiteBalanceTemperature, tint: $0) }),
-                        display: tintLabel(model.whiteBalanceTint))
+                        format: { tintLabel($0) })
                 }.transition(.opacity.combined(with: .offset(y: 4)))
             } else {
                 AutoReadout(text: "\(Int(model.whiteBalanceTemperature.rounded()))K \(tintLabel(model.whiteBalanceTint))")
@@ -253,7 +253,7 @@ private struct FocusSection: View {
                 FSlider(
                     label: "MF", range: CameraModel.lensPositionRange,
                     value: Binding(get: { model.focusLensPosition }, set: { model.setFocus(lensPosition: $0) }),
-                    display: String(format: "%.2f", model.focusLensPosition)
+                    format: { String(format: "%.2f", $0) }
                 )
                 .transition(.opacity.combined(with: .offset(y: 4)))
             } else {

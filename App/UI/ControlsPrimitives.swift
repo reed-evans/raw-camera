@@ -79,41 +79,34 @@ struct ModeSegment: View {
     }
 }
 
-/// Fixed width of a manual-control slider row. The label row inside contains a
-/// Spacer, so the row MUST be width-pinned: in the landscape drawer the
-/// transposed reservation frame proposes the panel's long dimension as width,
-/// and an unpinned row expands to fill it (blowing the panel up to the screen).
-private let sliderRowWidth: CGFloat = 120
-
+/// Float-typed manual-control slider. A thin adapter over `FineSlider` (the
+/// grab-to-fine-tune slider); bridges Float values/ranges to its Double core.
 struct FSlider: View {
-    let label: String; let range: ClosedRange<Float>; @Binding var value: Float; let display: String
+    let label: String
+    let range: ClosedRange<Float>
+    @Binding var value: Float
+    let format: (Float) -> String
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            HStack {
-                Text(label).font(.system(size: 9, weight: .medium, design: .monospaced)).foregroundStyle(Color.white.opacity(0.4))
-                Spacer()
-                Text(display).font(.system(size: 10, weight: .semibold, design: .monospaced)).foregroundStyle(Color.white.opacity(0.85))
-            }
-            Slider(value: $value, in: range).tint(.white).compactSlider(width: sliderRowWidth)
-        }
-        .frame(width: sliderRowWidth)
+        FineSlider(
+            label: label,
+            range: Double(range.lowerBound)...Double(range.upperBound),
+            value: Binding(get: { Double(value) }, set: { value = Float($0) }),
+            format: { format(Float($0)) }
+        )
     }
 }
 
+/// Double-typed manual-control slider (e.g. shutter seconds). Adapter over
+/// `FineSlider`.
 struct DSlider: View {
-    let label: String; let range: ClosedRange<Double>; @Binding var value: Double; let display: String
+    let label: String
+    let range: ClosedRange<Double>
+    @Binding var value: Double
+    let format: (Double) -> String
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            HStack {
-                Text(label).font(.system(size: 9, weight: .medium, design: .monospaced)).foregroundStyle(Color.white.opacity(0.4))
-                Spacer()
-                Text(display).font(.system(size: 10, weight: .semibold, design: .monospaced)).foregroundStyle(Color.white.opacity(0.85))
-            }
-            Slider(value: $value, in: range).tint(.white).compactSlider(width: sliderRowWidth)
-        }
-        .frame(width: sliderRowWidth)
+        FineSlider(label: label, range: range, value: $value, format: format)
     }
 }
 

@@ -11,6 +11,8 @@ struct CameraScreen: View {
     @State private var pinching = false
     @State private var zoomAtPinchStart: CGFloat = 1.0
     @State private var deviceAngle: Angle = .zero
+    /// Drives the full-width fine-tuning overlay when a manual slider is grabbed.
+    @State private var fineTune = FineTuneSession()
 
     init(model: CameraModel) {
         _model = State(initialValue: model)
@@ -61,6 +63,10 @@ struct CameraScreen: View {
                         }
                 }
 
+                // Fine-tuning overlay floats at the physical top of the screen
+                // in both orientations, independent of the panel.
+                fineTuneTopOverlay(screen: geo.size)
+
                 // Landscape histogram: a rotated bar along the physical
                 // bottom, floating at the far end from the dock (portrait
                 // top). A fixed screen position — no panel dependency.
@@ -69,6 +75,8 @@ struct CameraScreen: View {
                 }
             }
             .frame(width: geo.size.width, height: geo.size.height)
+            .environment(fineTune)
+            .animation(.easeOut(duration: 0.14), value: fineTune.active == nil)
         }
         .ignoresSafeArea()
         .statusBarHidden(true)
@@ -149,6 +157,39 @@ struct CameraScreen: View {
             .frame(
                 maxWidth: .infinity, maxHeight: 0,
                 alignment: isLandscape ? .bottom : .bottomTrailing)
+    }
+
+    /// Fine-tuning overlay floated at the physical top of the screen. Portrait:
+    /// a full-width card below the notch. Landscape: the card rotated to face
+    /// the user, hugging the physical-top edge (the portrait side opposite the
+    /// dock). Shown only while a manual slider is grabbed; display-only — the
+    /// finger drives the inline slider — so it never intercepts touches.
+    @ViewBuilder private func fineTuneTopOverlay(screen: CGSize) -> some View {
+        if let tuning = fineTune.active {
+            let card = FineTuneOverlay(tuning: tuning)
+            Group {
+                if isLandscape {
+                    // The physical top is the portrait edge opposite the dock.
+                    let onTrailing = physicalBottomLeading
+                    let length = min(screen.height - 120, 460)
+                    card
+                        .frame(width: length)
+                        .rotationEffect(deviceAngle)
+                        .frame(width: 110, height: length)
+                        .padding(onTrailing ? .trailing : .leading, 16)
+                        .frame(
+                            maxWidth: .infinity, maxHeight: .infinity,
+                            alignment: onTrailing ? .trailing : .leading)
+                } else {
+                    card
+                        .frame(width: screen.width - 24)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                        .padding(.top, 64)
+                }
+            }
+            .allowsHitTesting(false)
+            .transition(.opacity)
+        }
     }
 
     /// Histogram rotated to run along the physical bottom edge: a fixed-length
