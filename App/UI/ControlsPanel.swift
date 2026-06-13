@@ -16,6 +16,12 @@ struct ControlsPanel: View {
 
     private var isLandscape: Bool { abs(angle.degrees) == 90 }
 
+    /// Panel corner radius. Sized to read as concentric with the phone's
+    /// screen corner (~55pt) given the 12pt inset the panel sits at — the
+    /// rounded corner then runs parallel to, and safely inside, the display's
+    /// curve instead of being clipped by it (matches the system dock).
+    static let cornerRadius: CGFloat = 40
+
     var body: some View {
         VStack(spacing: 0) {
             if model.showSettings {
@@ -24,8 +30,8 @@ struct ControlsPanel: View {
             }
             commandBar
         }
-        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
-        .liquidGlass(in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: Self.cornerRadius, style: .continuous))
+        .liquidGlass(in: RoundedRectangle(cornerRadius: Self.cornerRadius, style: .continuous))
         .shadow(color: .black.opacity(0.45), radius: 24, x: 0, y: -4)
         .animation(.spring(response: 0.34, dampingFraction: 0.86), value: model.showSettings)
     }

@@ -51,7 +51,9 @@ struct CameraScreen: View {
                     }
                     ControlsPanel(model: model, angle: deviceAngle)
                         .padding(.horizontal, 12)
-                        .padding(.bottom, 6)
+                        // Match the side inset so the rounded corners stay
+                        // concentric with the screen and clear its corner curve.
+                        .padding(.bottom, 12)
                         .overlay(alignment: .top) {
                             if model.showZoomSlider {
                                 zoomSliderAbovePanel
