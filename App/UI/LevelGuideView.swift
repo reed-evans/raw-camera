@@ -20,6 +20,14 @@ struct LevelGuideView: View {
         static let crosshairArmLength: CGFloat = 10
         static let crosshairArmThick: CGFloat = 1
 
+        // Reference tick ring: 8 marks at 45°, starting at the horizon-bar ends.
+        // Cardinal (horizontal/vertical) ticks run longer than the diagonals.
+        static let tickCount = 8
+        static let tickLengthCardinal: CGFloat = 11
+        static let tickLengthDiagonal: CGFloat = 6
+        static let tickThick: CGFloat = 1
+        static let tickColor = Color.white.opacity(0.45)
+
         // Horizon-bar tint: muted white off-level, snapping to red when level.
         static let horizonOffColor = Color.white.opacity(0.70)
         static let horizonOnColor = Color(red: 1.0, green: 0.0, blue: 0.0)
@@ -31,6 +39,9 @@ struct LevelGuideView: View {
         ZStack {
             // Fixed crosshair reticle (static; tells user where level is)
             crosshair
+
+            // Fixed reference tick ring (static)
+            tickRing
 
             // Horizon bar rotates with roll
             horizonBar
@@ -65,6 +76,42 @@ struct LevelGuideView: View {
 
             ctx.stroke(path, with: .color(.white.opacity(0.30)), lineWidth: t)
         }
+    }
+
+    /// Eight radial ticks at 45° intervals. Each tick's inner end sits at the
+    /// horizon-bar radius, so the horizontal pair lines up with the level
+    /// line's ends. Even indices are the cardinal (horizontal + vertical) ticks
+    /// that snap to red when level, matching the horizon bar; odd indices are
+    /// the diagonals, which stay muted.
+    private var tickRing: some View {
+        ZStack {
+            ForEach(0..<Style.tickCount, id: \.self) { i in
+                let length = tickLength(forIndex: i)
+                Rectangle()
+                    .fill(tickColor(forIndex: i))
+                    .frame(width: Style.tickThick, height: length)
+                    .position(
+                        x: Style.size / 2,
+                        y: Style.size / 2 - Style.horizonWidth / 2 - length / 2
+                    )
+                    .frame(width: Style.size, height: Style.size)
+                    .rotationEffect(.degrees(Double(i) * 45))
+            }
+        }
+        .animation(.easeOut(duration: 0.15), value: isLevel)
+    }
+
+    private func isCardinal(_ i: Int) -> Bool { i % 2 == 0 }
+
+    /// Cardinal ticks (even index: up/right/down/left) run longer than the
+    /// diagonals; their inner ends still sit at the horizon-bar radius.
+    private func tickLength(forIndex i: Int) -> CGFloat {
+        isCardinal(i) ? Style.tickLengthCardinal : Style.tickLengthDiagonal
+    }
+
+    /// Cardinal ticks turn red when level; diagonals stay muted.
+    private func tickColor(forIndex i: Int) -> Color {
+        (isCardinal(i) && isLevel) ? Style.horizonOnColor : Style.tickColor
     }
 
     private var horizonBar: some View {
