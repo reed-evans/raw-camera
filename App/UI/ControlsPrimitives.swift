@@ -178,7 +178,7 @@ struct ThreshToggleRow: View {
         // the section's 90pt column (slider + spacing + "100%") — otherwise the
         // column grows and widens the whole panel for no visual gain.
         HStack(spacing: 8) {
-            Slider(value: $threshold, in: 0...1).tint(Color.white.opacity(0.7))
+            Slider(value: $threshold, in: 0...1).tint(Color(.systemBlue))
                 .compactSlider(width: stacked ? 50 : 64)
             Text(String(format: "%.0f%%", threshold * 100))
                 .font(.system(size: 9, weight: .semibold, design: .monospaced))
@@ -191,10 +191,17 @@ struct MiniToggleStyle: ToggleStyle {
     func makeBody(configuration: Configuration) -> some View {
         let on = configuration.isOn
         ZStack {
-            Capsule().fill(on ? Color.white.opacity(0.9) : Color.white.opacity(0.15)).frame(width: 34, height: 18)
-            Circle().fill(on ? Color.black : Color.white.opacity(0.6)).frame(width: 14, height: 14).offset(x: on ? 8 : -8)
+            // System-switch look: green track when on, gray when off, with a
+            // white capsule thumb (wider than tall) that slides to the edge.
+            Capsule()
+                .fill(on ? Color(.systemGreen) : Color.white.opacity(0.2))
+                .frame(width: 36, height: 20)
+            Capsule()
+                .fill(Color.white)
+                .frame(width: 22, height: 16)
+                .offset(x: on ? 5 : -5)
         }
-        .animation(.easeOut(duration: 0.14), value: on)
+        .animation(.easeOut(duration: 0.16), value: on)
         .onTapGesture { configuration.isOn.toggle() }
     }
 }

@@ -85,7 +85,7 @@ struct FineSlider: View {
             let x = knobWidth / 2 + fraction * usable
             ZStack(alignment: .leading) {
                 Capsule().fill(Color.white.opacity(0.18)).frame(height: 3)
-                Capsule().fill(Color.white.opacity(0.85))
+                Capsule().fill(Color(.systemBlue))
                     .frame(width: max(knobWidth / 2, x), height: 3)
                 Capsule().fill(Color.white).frame(width: knobWidth, height: knobHeight)
                     .position(x: x, y: geo.size.height / 2)
@@ -161,7 +161,7 @@ struct FineTuneOverlay: View {
             let x = knobWidth / 2 + CGFloat(tuning.fraction) * usable
             ZStack(alignment: .leading) {
                 Capsule().fill(Color.white.opacity(0.2)).frame(height: 4)
-                Capsule().fill(Color.white).frame(width: max(knobWidth / 2, x), height: 4)
+                Capsule().fill(Color(.systemBlue)).frame(width: max(knobWidth / 2, x), height: 4)
                 Capsule().fill(Color.white).frame(width: knobWidth, height: knobHeight)
                     .position(x: x, y: geo.size.height / 2)
             }

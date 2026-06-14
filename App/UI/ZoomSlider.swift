@@ -18,7 +18,7 @@ struct ZoomSlider: View {
                 value: Binding(get: { model.zoomFactor }, set: { model.setZoom($0) }),
                 in: lo...hi
             )
-            .tint(.white)
+            .tint(Color(.systemBlue))
             .frame(width: 170)
             .rotationEffect(.degrees(-90))  // bottom = min, top = max
             .frame(width: 40, height: 170)
