@@ -24,6 +24,7 @@ enum CapturePhotoSettingsFactory {
         }
 
         let settings: AVCapturePhotoSettings
+        var isPlainRAW = false
         if let rawFormat, photoOutput.availableRawPhotoPixelFormatTypes.contains(rawFormat.pixelFormat) {
             if rawFormat.isProRAW {
                 settings = AVCapturePhotoSettings(
@@ -32,16 +33,33 @@ enum CapturePhotoSettingsFactory {
                 )
             } else {
                 settings = AVCapturePhotoSettings(rawPixelFormatType: rawFormat.pixelFormat)
+                isPlainRAW = true
             }
         } else {
             settings = AVCapturePhotoSettings(format: [AVVideoCodecKey: AVVideoCodecType.hevc])
         }
 
-        settings.photoQualityPrioritization = options.maxQuality ? .quality : .balanced
-        if options.highResolution, let dims = largestPhotoDimensions(of: device) {
-            settings.maxPhotoDimensions = dims
+        if isPlainRAW {
+            // photoQualityPrioritization applies to the PROCESSED photo; a
+            // RAW-only capture has none, so setting it throws an (uncatchable)
+            // "Unsupported when capturing RAW" exception. ProRAW is exempt — it
+            // carries a processed HEVC companion. Pin dimensions to the
+            // sensor-native size too, so we don't inherit the output's raised
+            // 48MP ceiling (which plain Bayer RAW also can't produce).
+            settings.maxPhotoDimensions = sensorDimensions(of: device)
+        } else {
+            settings.photoQualityPrioritization = options.maxQuality ? .quality : .balanced
+            if options.highResolution, let dims = largestPhotoDimensions(of: device) {
+                settings.maxPhotoDimensions = dims
+            }
         }
         return settings
+    }
+
+    /// The active format's source (sensor-readout) dimensions — the size plain
+    /// Bayer RAW is captured at, and always a valid RAW `maxPhotoDimensions`.
+    static func sensorDimensions(of device: AVCaptureDevice) -> CMVideoDimensions {
+        CMVideoFormatDescriptionGetDimensions(device.activeFormat.formatDescription)
     }
 
     /// 3-shot Bayer-RAW exposure bracket (±2 EV, clamped to the device's bias
@@ -66,11 +84,14 @@ enum CapturePhotoSettingsFactory {
         let frames = biases.map {
             AVCaptureAutoExposureBracketedStillImageSettings.autoExposureSettings(exposureTargetBias: $0)
         }
-        return AVCapturePhotoBracketSettings(
+        let settings = AVCapturePhotoBracketSettings(
             rawPixelFormatType: bayer,
             processedFormat: nil,
             bracketedSettings: frames
         )
+        // Same Bayer-RAW vs inherited-48MP-ceiling crash as the single-shot path.
+        settings.maxPhotoDimensions = sensorDimensions(of: device)
+        return settings
     }
 
     /// The largest still-photo dimensions the active format supports (48MP on
