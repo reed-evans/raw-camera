@@ -17,12 +17,6 @@ final class FineTuneSession {
         let range: ClosedRange<Double>
         let format: (Double) -> String
         var value: Double
-
-        /// 0...1 position of `value` within `range`.
-        var fraction: Double {
-            let span = range.upperBound - range.lowerBound
-            return span > 0 ? (value - range.lowerBound) / span : 0
-        }
     }
 
     var active: Active?
@@ -47,11 +41,6 @@ struct FineSlider: View {
     /// proposes the panel's long dimension as width, and an unpinned row
     /// expands to fill it (blowing the panel up to the screen).
     static let rowWidth: CGFloat = 120
-    private let trackHeight: CGFloat = 18
-    // Knob is a horizontal capsule (wider than tall) to match the native
-    // slider thumb the zoom/zebra sliders still use.
-    private let knobWidth: CGFloat = 22
-    private let knobHeight: CGFloat = 14
     /// Finger travel (points) that spans the full value range while tuning.
     /// ~3x the resting track width, so each drag is ~3x finer.
     private let fineTravel: CGFloat = 360
@@ -67,11 +56,11 @@ struct FineSlider: View {
         VStack(alignment: .leading, spacing: 2) {
             HStack {
                 Text(label)
-                    .font(.system(size: 9, weight: .medium, design: .monospaced))
+                    .font(.system(size: 11, weight: .medium, design: .monospaced))
                     .foregroundStyle(Color.white.opacity(0.4))
                 Spacer()
                 Text(format(value))
-                    .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                    .font(.system(size: 11, weight: .semibold, design: .monospaced))
                     .foregroundStyle(Color.white.opacity(0.85))
             }
             track
@@ -80,31 +69,21 @@ struct FineSlider: View {
     }
 
     private var track: some View {
-        GeometryReader { geo in
-            let usable = geo.size.width - knobWidth
-            let x = knobWidth / 2 + fraction * usable
-            ZStack(alignment: .leading) {
-                Capsule().fill(Color.white.opacity(0.18)).frame(height: 3)
-                Capsule().fill(Color(.systemBlue))
-                    .frame(width: max(knobWidth / 2, x), height: 3)
-                Capsule().fill(Color.white).frame(width: knobWidth, height: knobHeight)
-                    .position(x: x, y: geo.size.height / 2)
+        CapsuleSliderTrack(fraction: fraction)
+            .frame(width: Self.rowWidth, height: ControlThumb.sliderHeight)
+            .contentShape(Rectangle())
+            .gesture(drag)
+            .accessibilityElement()
+            .accessibilityLabel(label)
+            .accessibilityValue(format(value))
+            .accessibilityAdjustableAction { direction in
+                let step = (range.upperBound - range.lowerBound) / 100
+                switch direction {
+                case .increment: value = min(value + step, range.upperBound)
+                case .decrement: value = max(value - step, range.lowerBound)
+                default: break
+                }
             }
-        }
-        .frame(width: Self.rowWidth, height: trackHeight)
-        .contentShape(Rectangle())
-        .gesture(drag)
-        .accessibilityElement()
-        .accessibilityLabel(label)
-        .accessibilityValue(format(value))
-        .accessibilityAdjustableAction { direction in
-            let step = (range.upperBound - range.lowerBound) / 100
-            switch direction {
-            case .increment: value = min(value + step, range.upperBound)
-            case .decrement: value = max(value - step, range.lowerBound)
-            default: break
-            }
-        }
     }
 
     private var drag: some Gesture {
@@ -140,7 +119,7 @@ struct FineTuneOverlay: View {
     let tuning: FineTuneSession.Active
 
     var body: some View {
-        VStack(spacing: 8) {
+        VStack(spacing: 2) {
             Text(tuning.format(tuning.value))
                 .font(.system(size: 14, weight: .semibold, design: .monospaced))
                 .foregroundStyle(.white)
@@ -148,24 +127,16 @@ struct FineTuneOverlay: View {
             wideTrack
         }
         .padding(.horizontal, 18)
-        .padding(.vertical, 12)
+        .padding(.vertical, 6)
         .liquidGlass(in: RoundedRectangle(cornerRadius: 24, style: .continuous))
         .shadow(color: .black.opacity(0.4), radius: 18, y: 4)
     }
 
+    // Native slider matching the on-screen zoom control. Display-only: the
+    // finger drives the inline slider, and the overlay carries
+    // `.allowsHitTesting(false)`, so this only reflects the tuning value.
     private var wideTrack: some View {
-        GeometryReader { geo in
-            let knobWidth: CGFloat = 24
-            let knobHeight: CGFloat = 14
-            let usable = geo.size.width - knobWidth
-            let x = knobWidth / 2 + CGFloat(tuning.fraction) * usable
-            ZStack(alignment: .leading) {
-                Capsule().fill(Color.white.opacity(0.2)).frame(height: 4)
-                Capsule().fill(Color(.systemBlue)).frame(width: max(knobWidth / 2, x), height: 4)
-                Capsule().fill(Color.white).frame(width: knobWidth, height: knobHeight)
-                    .position(x: x, y: geo.size.height / 2)
-            }
-        }
-        .frame(height: 18)
+        Slider(value: .constant(tuning.value), in: tuning.range)
+            .tint(Color(.systemBlue))
     }
 }

@@ -50,11 +50,11 @@ struct ControlsPanel: View {
     @ViewBuilder private var statusChip: some View {
         if let err = model.lastCaptureError {
             Label(err, systemImage: "exclamationmark.triangle.fill")
-                .font(.caption2).foregroundStyle(.red).lineLimit(1)
+                .font(.system(size: 11)).foregroundStyle(.red).lineLimit(1)
                 .transition(.opacity.combined(with: .move(edge: .leading)))
         } else {
             Text(model.preferProRAW && model.isProRAWAvailable ? "ProRAW" : "RAW")
-                .font(.system(size: 10, weight: .bold, design: .monospaced))
+                .font(.system(size: 11, weight: .bold, design: .monospaced))
                 .tracking(1.0)
                 .foregroundStyle(Color.white.opacity(0.55))
         }
@@ -297,9 +297,9 @@ private struct FormatSection: View {
             VStack(alignment: .leading, spacing: 6) {
                 HStack(spacing: 8) {
                     Text("ProRAW")
-                        .font(.system(size: 10, weight: .bold, design: .monospaced))
+                        .font(.system(size: 11, weight: .bold, design: .monospaced))
                         .foregroundStyle(proRawActive ? Color.black : Color.white.opacity(0.5))
-                        .padding(.horizontal, 6).padding(.vertical, 3)
+                        .padding(.horizontal, 7).padding(.vertical, 4)
                         .background(proRawActive ? Color.white : Color.white.opacity(0.1))
                         .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
                         .animation(.easeOut(duration: 0.15), value: proRawActive)
@@ -308,7 +308,7 @@ private struct FormatSection: View {
                         .disabled(!model.isProRAWAvailable).opacity(model.isProRAWAvailable ? 1.0 : 0.35)
                 }
                 Text(model.isProRAWAvailable ? "available" : "unavailable")
-                    .font(.system(size: 9, weight: .medium, design: .monospaced))
+                    .font(.system(size: 11, weight: .medium, design: .monospaced))
                     .foregroundStyle(model.isProRAWAvailable ? Color.green.opacity(0.8) : Color.white.opacity(0.35))
             }
         }
@@ -379,9 +379,9 @@ private struct AspectSection: View {
             model.aspectRatio = ratio
         } label: {
             Text(ratio.label)
-                .font(.system(size: 13, weight: .semibold, design: .monospaced))
+                .font(.system(size: 11, weight: .semibold, design: .monospaced))
                 .foregroundStyle(active ? .black : .white.opacity(0.5))
-                .frame(width: 44, height: 26)
+                .frame(width: 42, height: 24)
                 .background(
                     active ? Color.white : Color.white.opacity(0.06),
                     in: RoundedRectangle(cornerRadius: 6, style: .continuous))
