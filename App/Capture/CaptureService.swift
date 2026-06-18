@@ -18,6 +18,7 @@ final class CaptureService: NSObject, CameraCapturing {
     var onVideoFrame: ((CVPixelBuffer) -> Void)?
     var onConfigured: ((ExposureLimits, Bool) -> Void)?
     var onCaptureFinished: ((String?) -> Void)?
+    var onCaptureThumbnail: ((CGImage) -> Void)?
     var onZoomRange: ((CGFloat, CGFloat) -> Void)?
     var onCaptureCapabilities: ((CaptureCapabilities) -> Void)?
     var onDeviceValues: ((DeviceValues) -> Void)?
@@ -396,7 +397,10 @@ extension CaptureService {
             rawFormat: selectedRAWFormat,
             options: captureOptions
         )
-        let processor = PhotoCaptureProcessor(onCaptureFinished: onCaptureFinished)
+        let processor = PhotoCaptureProcessor(
+            onCaptureFinished: onCaptureFinished,
+            onThumbnail: onCaptureThumbnail
+        )
         // Retain the delegate across the async Photos save; release it when the
         // capture terminates so it isn't deallocated mid-flight (and the result
         // isn't dropped). `completion` and the set mutation stay on sessionQueue.

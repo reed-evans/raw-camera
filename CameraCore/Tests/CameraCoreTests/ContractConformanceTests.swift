@@ -13,6 +13,7 @@ final class MockCaptureService: CameraCapturing {
     var onVideoFrame: ((CVPixelBuffer) -> Void)?
     var onConfigured: ((ExposureLimits, Bool) -> Void)?
     var onCaptureFinished: ((String?) -> Void)?
+    var onCaptureThumbnail: ((CGImage) -> Void)?
     var onZoomRange: ((CGFloat, CGFloat) -> Void)?
     var onCaptureCapabilities: ((CaptureCapabilities) -> Void)?
     var onDeviceValues: ((DeviceValues) -> Void)?

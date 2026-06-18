@@ -1,4 +1,5 @@
 import AVFoundation
+import ImageIO
 import Photos
 import os.log
 
@@ -11,6 +12,11 @@ import os.log
 final class PhotoCaptureProcessor: NSObject {
 
     private let onCaptureFinished: ((String?) -> Void)?
+    /// Delivers a small upright preview of a successfully-saved capture so the UI
+    /// can flash a confirmation thumbnail. Fires before `onCaptureFinished(nil)`.
+    private let onThumbnail: ((CGImage) -> Void)?
+    /// Longest edge of the generated confirmation thumbnail, in pixels.
+    private static let thumbnailMaxPixel = 256
     /// Set by the owner (`CaptureService`) to release this processor once the
     /// capture has fully terminated (terminal delegate fired + Photos save done).
     /// Lets the owner retain the delegate across the async save without leaking.
@@ -29,8 +35,12 @@ final class PhotoCaptureProcessor: NSObject {
 
     private let logger = Logger(subsystem: "com.rawcamera", category: "PhotoCapture")
 
-    init(onCaptureFinished: ((String?) -> Void)?) {
+    init(
+        onCaptureFinished: ((String?) -> Void)?,
+        onThumbnail: ((CGImage) -> Void)? = nil
+    ) {
         self.onCaptureFinished = onCaptureFinished
+        self.onThumbnail = onThumbnail
     }
 }
 
@@ -95,6 +105,19 @@ extension PhotoCaptureProcessor: AVCapturePhotoCaptureDelegate {
         onComplete?(self)
     }
 
+    /// Decode a small, orientation-corrected thumbnail from encoded photo data
+    /// (DNG or HEVC) using Image I/O's embedded preview where available. Returns
+    /// `nil` rather than throwing — the confirmation thumbnail is non-essential.
+    private func makeThumbnail(from data: Data?) -> CGImage? {
+        guard let data, let source = CGImageSourceCreateWithData(data as CFData, nil) else { return nil }
+        let options: [CFString: Any] = [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceCreateThumbnailWithTransform: true,
+            kCGImageSourceThumbnailMaxPixelSize: Self.thumbnailMaxPixel,
+        ]
+        return CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary)
+    }
+
     /// Log an error with its real domain/code and return a user-facing message.
     private func describe(_ error: Error, context: String) -> String {
         let ns = error as NSError
@@ -144,6 +167,12 @@ extension PhotoCaptureProcessor: AVCapturePhotoCaptureDelegate {
             // If shouldMoveFile consumed the files this is a harmless no-op.
             rawURLs.forEach { try? FileManager.default.removeItem(at: $0) }
             if success {
+                // Confirmation thumbnail: prefer the lighter processed companion
+                // (ProRAW HEVC); fall back to decoding the RAW DNG's embedded
+                // preview. Best-effort — a missing thumbnail never fails a save.
+                if let image = self?.makeThumbnail(from: processedData ?? rawDatas.first) {
+                    self?.onThumbnail?(image)
+                }
                 self?.finish(nil)
             } else if let error {
                 self?.finish(self?.describe(error, context: "Photos save") ?? error.localizedDescription)

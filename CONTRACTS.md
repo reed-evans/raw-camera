@@ -101,6 +101,13 @@ Options: 48MP full-res stills, 3-shot ±2EV Bayer-RAW exposure bracketing
 processed output, and `.quality` photo prioritization. Unsupported options are
 ignored; the UI disables them per the reported capabilities.
 
+**Amendment A4 (capture feedback):** `onCaptureThumbnail: ((CGImage) -> Void)?`
+added to `CameraCapturing` — fires on a successful save with a small upright
+preview (decoded from the DNG/HEVC via Image I/O). `CameraModel` exposes the
+press signal (`captureStartCount`, bumped in `capturePhoto()`) that drives the
+immediate haptic + shutter blink, and the save signal (`captureSavedCount` +
+`lastCaptureThumbnail`) that drives the brief top-left confirmation thumbnail.
+
 ---
 
 ## 4. `PreviewUniforms` — FROZEN ABI (grader T1-7)
@@ -153,7 +160,9 @@ format:     preferProRAW, isProRAWAvailable
 monitoring: zebraEnabled, zebraThreshold, focusPeakingEnabled, focusPeakingThreshold,
             histogramEnabled, levelGuideEnabled
 data:       histogram (HistogramData), rollDegrees, pitchDegrees, isLevel
-status:     isSessionRunning, lastCaptureError
+status:     isSessionRunning, lastCaptureError,
+            captureStartCount (read-only; bumped when the shutter is pressed),
+            captureSavedCount + lastCaptureThumbnail (read-only; bumped/set on each saved DNG)
 ```
 
 Intents:

@@ -28,6 +28,12 @@ public protocol CameraCapturing: AnyObject {
     /// saved to Photos; non-`nil` is a user-presentable failure message.
     var onCaptureFinished: ((_ error: String?) -> Void)? { get set }
 
+    /// Fires (background queue) once a just-saved capture has a small, upright
+    /// preview thumbnail ready — the UI briefly shows it as a confirmation that
+    /// the photo landed. Only fires on a successful save. Consumers hop to the
+    /// main actor before touching observable state.
+    var onCaptureThumbnail: ((CGImage) -> Void)? { get set }
+
     /// Fires after configuration (background queue): the device's usable video
     /// zoom range (min...max). Consumers hop to the main actor.
     var onZoomRange: ((_ minZoom: CGFloat, _ maxZoom: CGFloat) -> Void)? { get set }

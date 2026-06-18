@@ -13,6 +13,10 @@ struct CameraScreen: View {
     @State private var deviceAngle: Angle = .zero
     /// Drives the full-width fine-tuning overlay when a manual slider is grabbed.
     @State private var fineTune = FineTuneSession()
+    /// Opacity of the brief black shutter-blink fired the moment a capture starts.
+    @State private var shutterBlink: Double = 0
+    /// Whether the post-save confirmation thumbnail is currently shown.
+    @State private var showThumbnail = false
 
     init(model: CameraModel) {
         _model = State(initialValue: model)
@@ -73,6 +77,17 @@ struct CameraScreen: View {
                 if model.histogramEnabled && isLandscape {
                     landscapeHistogramStrip
                 }
+
+                // Confirmation thumbnail: the just-saved frame flashes in at the
+                // physical top-left for a beat or two, then fades away.
+                captureThumbnailOverlay(screen: geo.size)
+
+                // Shutter blink: a brief black curtain over the viewfinder fired
+                // the instant a capture starts. Never intercepts touches.
+                Color.black
+                    .opacity(shutterBlink)
+                    .ignoresSafeArea()
+                    .allowsHitTesting(false)
             }
             .frame(width: geo.size.width, height: geo.size.height)
             .environment(fineTune)
@@ -80,6 +95,21 @@ struct CameraScreen: View {
         }
         .ignoresSafeArea()
         .statusBarHidden(true)
+        // Immediate capture feedback: a crisp haptic tap + a quick shutter blink
+        // the instant the shutter is pressed, before the photo is processed.
+        .sensoryFeedback(.impact(weight: .medium), trigger: model.captureStartCount)
+        .onChange(of: model.captureStartCount) {
+            shutterBlink = 0.55
+            withAnimation(.easeOut(duration: 0.28)) { shutterBlink = 0 }
+        }
+        // Confirmation thumbnail lifecycle: show on each save, auto-hide after a
+        // beat. Keying the task on the counter restarts the timer per capture.
+        .task(id: model.captureSavedCount) {
+            guard model.captureSavedCount > 0 else { return }
+            withAnimation(.spring(response: 0.32, dampingFraction: 0.7)) { showThumbnail = true }
+            try? await Task.sleep(for: .seconds(1.8))
+            withAnimation(.easeInOut(duration: 0.3)) { showThumbnail = false }
+        }
         .onAppear {
             UIDevice.current.beginGeneratingDeviceOrientationNotifications()
             refreshOrientation()
@@ -192,6 +222,25 @@ struct CameraScreen: View {
         }
     }
 
+    /// Post-save confirmation thumbnail, pinned to the screen's top-leading
+    /// corner and counter-rotated so the saved frame stays upright in any
+    /// orientation. Fixed-size, so the bare rotation never disturbs layout.
+    /// Display-only — it never intercepts touches.
+    @ViewBuilder private func captureThumbnailOverlay(screen: CGSize) -> some View {
+        if showThumbnail, let image = model.lastCaptureThumbnail {
+            CaptureThumbnail(image: image)
+                .facingUser(deviceAngle)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                .padding(.top, 64)
+                .padding(.leading, 20)
+                .allowsHitTesting(false)
+                .transition(
+                    .asymmetric(
+                        insertion: .scale(scale: 0.6, anchor: .topLeading).combined(with: .opacity),
+                        removal: .opacity))
+        }
+    }
+
     /// Histogram rotated to run along the physical bottom edge: a fixed-length
     /// strip pinned to the portrait leading/trailing edge (the physical
     /// bottom), floating at the portrait-top end of the screen — the far
@@ -214,6 +263,33 @@ struct CameraScreen: View {
     /// which sits in the lower-right whenever the slider is shown.
     private var histogramTrailingPadding: CGFloat {
         model.showZoomSlider ? 70 : 12
+    }
+}
+
+// MARK: - CaptureThumbnail
+
+/// Small rounded chip showing the just-saved frame — a quiet, dark-luxury
+/// confirmation that the capture landed.
+private struct CaptureThumbnail: View {
+    let image: CGImage
+
+    private static let side: CGFloat = 56
+    private static let cornerRadius: CGFloat = 12
+
+    var body: some View {
+        // `decorative` — purely confirmatory; the orientation is already baked
+        // into the thumbnail by Image I/O, so render it as-is.
+        Image(decorative: image, scale: 1, orientation: .up)
+            .resizable()
+            .scaledToFill()
+            .frame(width: Self.side, height: Self.side)
+            .clipShape(RoundedRectangle(cornerRadius: Self.cornerRadius, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: Self.cornerRadius, style: .continuous)
+                    .strokeBorder(Color.white.opacity(0.25), lineWidth: 1)
+            )
+            .shadow(color: .black.opacity(0.5), radius: 10, x: 0, y: 3)
+            .accessibilityHidden(true)
     }
 }
 

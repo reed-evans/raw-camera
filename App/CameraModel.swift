@@ -70,6 +70,17 @@ public final class CameraModel {
     // MARK: Status
     public var isSessionRunning: Bool = false
     public var lastCaptureError: String?
+    /// Monotonic counter bumped the instant a capture is *initiated* (the shutter
+    /// is pressed). The UI observes the change to fire the immediate capture
+    /// feedback — a haptic tap + shutter blink — before the photo is processed.
+    public private(set) var captureStartCount: Int = 0
+    /// Monotonic counter bumped each time a capture is actually *saved* (a DNG
+    /// reached disk). Paired with `lastCaptureThumbnail`; the UI flashes the
+    /// thumbnail briefly when this changes.
+    public private(set) var captureSavedCount: Int = 0
+    /// Upright preview of the most recently saved capture, for the confirmation
+    /// thumbnail. `nil` until the first successful save.
+    public private(set) var lastCaptureThumbnail: CGImage?
 
     // MARK: Frozen UI ranges (so controls bind without guessing)
     public static let temperatureRange: ClosedRange<Float> = 2500...8000  // Kelvin
@@ -138,6 +149,15 @@ public final class CameraModel {
                 self?.lastCaptureError = error
             }
         }
+        service.onCaptureThumbnail = { [weak self] image in
+            Task { @MainActor in
+                guard let self else { return }
+                // A thumbnail only arrives on a successful save, so this is the
+                // honest "photo landed" moment that drives the confirmation chip.
+                self.lastCaptureThumbnail = image
+                self.captureSavedCount += 1
+            }
+        }
         service.onZoomRange = { [weak self] lo, hi in
             Task { @MainActor in
                 self?.minZoom = lo
@@ -152,8 +172,12 @@ public final class CameraModel {
                 self.is10BitHDRAvailable = caps.supports10BitHDR
             }
         }
-        // Live device values for read-only readouts. Only adopt them for axes
-        // currently in auto — manual axes keep the user's chosen values.
+        wireDeviceValues()
+    }
+
+    /// Live device values for read-only readouts. Only adopt them for axes
+    /// currently in auto — manual axes keep the user's chosen values.
+    private func wireDeviceValues() {
         service.onDeviceValues = { [weak self] values in
             Task { @MainActor in
                 guard let self else { return }
@@ -184,7 +208,12 @@ public final class CameraModel {
         monitoring.stopMotion()
         isSessionRunning = false
     }
-    public func capturePhoto() { service.capturePhoto() }
+    public func capturePhoto() {
+        // Bump first so the UI fires immediate feedback the instant the shutter
+        // is pressed, independent of how long the capture+save takes.
+        captureStartCount &+= 1
+        service.capturePhoto()
+    }
     public func focusTap(at point: CGPoint) { service.focus(at: point) }
 
     public func setManualExposure(iso: Float, shutterSeconds: Double) {
