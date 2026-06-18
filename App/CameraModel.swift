@@ -234,8 +234,7 @@ public final class CameraModel {
         whiteBalanceTemperature = temperature
         whiteBalanceTint = tint
         isManualWhiteBalance = true
-        let gains = WhiteBalance.gains(temperature: temperature, tint: tint, maxGain: maxWhiteBalanceGain)
-        service.setWhiteBalance(gains)
+        service.setWhiteBalance(temperature: temperature, tint: tint)
     }
 
     public func enableAutoWhiteBalance() {

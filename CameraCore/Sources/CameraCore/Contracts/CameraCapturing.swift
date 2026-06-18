@@ -65,7 +65,13 @@ public protocol CameraCapturing: AnyObject {
     func setManualExposure(iso: Float, shutterSeconds: Double)
     func setAutoExposure()
 
-    func setWhiteBalance(_ gains: WhiteBalanceGains)
+    /// Lock white balance to a colour temperature (Kelvin) + tint. The
+    /// implementation converts to device gains with AVFoundation's
+    /// `deviceWhiteBalanceGains(for:)` — the exact inverse of the
+    /// `temperatureAndTintValues(for:)` used to report auto-WB values via
+    /// `onDeviceValues` — so the value shown in auto reproduces the same
+    /// preview when entered manually. Out-of-range gains are clamped.
+    func setWhiteBalance(temperature: Float, tint: Float)
     func setAutoWhiteBalance()
 
     func setFocus(lensPosition: Float)

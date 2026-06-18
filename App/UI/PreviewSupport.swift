@@ -25,7 +25,7 @@
         func focus(at point: CGPoint) {}
         func setManualExposure(iso: Float, shutterSeconds: Double) {}
         func setAutoExposure() {}
-        func setWhiteBalance(_ gains: WhiteBalanceGains) {}
+        func setWhiteBalance(temperature: Float, tint: Float) {}
         func setAutoWhiteBalance() {}
         func setFocus(lensPosition: Float) {}
         func setAutoFocus() {}

@@ -30,9 +30,12 @@ final class CaptureService: NSObject, CameraCapturing {
 
     // MARK: Private state
 
-    private let sessionQueue = DispatchQueue(label: "com.rawcamera.sessionQueue", qos: .userInitiated)
+    // sessionQueue/videoDevice/logger are internal (not private) so the
+    // CaptureService+WhiteBalance extension can dispatch, read the device, and
+    // log on the same shared state.
+    let sessionQueue = DispatchQueue(label: "com.rawcamera.sessionQueue", qos: .userInitiated)
     private let session = AVCaptureSession()
-    private var videoDevice: AVCaptureDevice?
+    var videoDevice: AVCaptureDevice?
     private var photoOutput: AVCapturePhotoOutput?
     private var preferProRAW: Bool = true
     private var selectedRAWFormat: RAWFormat?
@@ -41,7 +44,7 @@ final class CaptureService: NSObject, CameraCapturing {
     private var captureOptions = CaptureOptions()
     /// The session's auto-chosen color space, restored when 10-bit HDR is off.
     private var standardColorSpace: AVCaptureColorSpace = .sRGB
-    private let logger = Logger(subsystem: "com.rawcamera", category: "CaptureService")
+    let logger = Logger(subsystem: "com.rawcamera", category: "CaptureService")
     /// Active capture delegates, retained across the async Photos save so
     /// `onCaptureFinished` is never dropped. AVFoundation does not retain the
     /// delegate, so we own it here and release it when the capture terminates.
@@ -138,41 +141,6 @@ final class CaptureService: NSObject, CameraCapturing {
                 }
             } catch {
                 self?.logger.error("setAutoExposure failed: \(error)")
-            }
-        }
-    }
-
-    // MARK: White balance
-
-    func setWhiteBalance(_ gains: WhiteBalanceGains) {
-        sessionQueue.async { [weak self] in
-            guard let device = self?.videoDevice else { return }
-            let clamped = WhiteBalance.clampGains(gains, maxGain: device.maxWhiteBalanceGain)
-            var deviceGains = AVCaptureDevice.WhiteBalanceGains()
-            deviceGains.redGain = clamped.red
-            deviceGains.greenGain = clamped.green
-            deviceGains.blueGain = clamped.blue
-            do {
-                try device.lockForConfiguration()
-                defer { device.unlockForConfiguration() }
-                device.setWhiteBalanceModeLocked(with: deviceGains, completionHandler: nil)
-            } catch {
-                self?.logger.error("setWhiteBalance failed: \(error)")
-            }
-        }
-    }
-
-    func setAutoWhiteBalance() {
-        sessionQueue.async { [weak self] in
-            guard let device = self?.videoDevice else { return }
-            do {
-                try device.lockForConfiguration()
-                defer { device.unlockForConfiguration() }
-                if device.isWhiteBalanceModeSupported(.continuousAutoWhiteBalance) {
-                    device.whiteBalanceMode = .continuousAutoWhiteBalance
-                }
-            } catch {
-                self?.logger.error("setAutoWhiteBalance failed: \(error)")
             }
         }
     }

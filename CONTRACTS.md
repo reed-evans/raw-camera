@@ -65,7 +65,7 @@ public protocol CameraCapturing: AnyObject {
     func focus(at point: CGPoint)   // normalized device coords 0...1, top-left origin
     func setManualExposure(iso: Float, shutterSeconds: Double)
     func setAutoExposure()
-    func setWhiteBalance(_ gains: WhiteBalanceGains)
+    func setWhiteBalance(temperature: Float, tint: Float)  // converts via AVFoundation deviceWhiteBalanceGains(for:)
     func setAutoWhiteBalance()
     func setFocus(lensPosition: Float)
     func setAutoFocus()
